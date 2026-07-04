@@ -1,0 +1,43 @@
+name: wealth_flow
+description: Long-term wealth simulation app for ETF and stock investors.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_native_splash: ^2.4.8
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  http: ^1.2.0
+  purchases_flutter: ^10.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/korean_stocks.json
+    - assets/launch_logo.png
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#176B5B"
+  image: "assets/icon/app_icon.png"
+  android: true
+  ios: true
+  android_gravity: center
+  ios_content_mode: center
+  fullscreen: true
