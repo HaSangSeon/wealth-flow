@@ -11,7 +11,7 @@ import 'payment_service.dart';
 import 'premium.dart';
 import 'yahoo_finance_service.dart';
 
-// ─── 앱 진입점 ────────────────────────────────────────────
+// ─── 앱 진ㄴㄴ입점 ────────────────────────────────────────────
 
 late final ValueNotifier<ThemeMode> themeNotifier;
 
