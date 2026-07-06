@@ -1137,31 +1137,31 @@ class AssetManagementTab extends StatelessWidget {
                               child: ListTile(
                                 onTap: () => onEdit(holding),
                                 contentPadding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
-                                title: Text.rich(
-                                  TextSpan(
-                                    children: [
-                                      TextSpan(
-                                        text: holding.name,
+                                title: Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        holding.name,
                                         style: TextStyle(
                                             fontWeight: FontWeight.w800,
                                             fontSize: 16,
                                             color: isDark ? Colors.white : Colors.black87),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      if (holding.symbol != null && holding.symbol!.isNotEmpty) ...[
-                                        const TextSpan(text: ' '),
-                                        TextSpan(
-                                          text: holding.symbol!,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                            color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
-                                          ),
+                                    ),
+                                    if (holding.symbol != null && holding.symbol!.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        holding.symbol!,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
                                         ),
-                                      ],
+                                      ),
                                     ],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                  ],
                                 ),
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
@@ -1780,11 +1780,13 @@ class _ProjectionChartState extends State<_ProjectionChart> {
 
   void _updateSelectedIndex(Offset localPosition, double width) {
     if (widget.points.isEmpty) return;
-    final chartWidth = width - 50.0;
-    if (localPosition.dx < 0 || localPosition.dx > chartWidth) return;
+    final chartWidth = width;
+    final chartX = localPosition.dx;
+    
+    if (chartX < 0 || chartX > chartWidth) return;
     
     final double step = chartWidth / (widget.points.length - 1);
-    final int index = (localPosition.dx / step).round().clamp(0, widget.points.length - 1);
+    final int index = (chartX / step).round().clamp(0, widget.points.length - 1);
     if (_selectedIndex != index) {
       setState(() {
         _selectedIndex = index;
@@ -1867,7 +1869,7 @@ class _ProjectionChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (points.length < 2) return;
 
-    final chartWidth = size.width - 50.0;
+    final chartWidth = size.width;
     final chartHeight = size.height - 25.0;
     const topMargin = 10.0;
     final actualGraphHeight = chartHeight - topMargin;
@@ -1904,17 +1906,27 @@ class _ProjectionChartPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      
+      // Y축 텍스트를 차트 내부 왼쪽(0), 그리드 선 위로 배치
       textPainter.paint(
         canvas,
-        Offset(chartWidth + 6, y - textPainter.height / 2),
+        Offset(0, y - textPainter.height - 2),
       );
     }
 
     // 2. X-axis labels (bottom)
     final interval = math.max(1, points.length ~/ 4);
     for (var i = 0; i < points.length; i++) {
-      if (i == 0 || i == points.length - 1 || i % interval == 0) {
+      bool shouldDraw = false;
+      if (i == 0 || i == points.length - 1) {
+        shouldDraw = true;
+      } else if (i % interval == 0) {
+        // 마지막 연도 텍스트와의 겹침 방지 (거리가 interval의 절반 이하로 가까우면 생략)
+        if ((points.length - 1 - i) > (interval / 2.0)) {
+          shouldDraw = true;
+        }
+      }
+
+      if (shouldDraw) {
         final offset = mapPoint(points[i], i);
         final yearText = '${points[i].year}년';
         final textPainter = TextPainter(
@@ -1929,9 +1941,14 @@ class _ProjectionChartPainter extends CustomPainter {
           textDirection: TextDirection.ltr,
         )..layout();
 
+        // 0년 라벨이 왼쪽으로 짤리지 않게 방어, 마지막 연도 라벨이 오른쪽으로 짤리지 않게 방어
+        double labelX = offset.dx - textPainter.width / 2;
+        if (i == 0) labelX = 0;
+        if (i == points.length - 1) labelX = chartWidth - textPainter.width;
+
         textPainter.paint(
           canvas,
-          Offset(offset.dx - textPainter.width / 2, chartHeight + 6),
+          Offset(labelX, chartHeight + 6),
         );
       }
     }
@@ -2031,15 +2048,53 @@ class _ProjectionChartPainter extends CustomPainter {
 
 // ─── 연도별 상세표 ────────────────────────────────────────
 
-class _ProjectionTable extends StatelessWidget {
+class _ProjectionTable extends StatefulWidget {
   const _ProjectionTable({required this.points});
 
   final List<ProjectionPoint> points;
 
   @override
+  State<_ProjectionTable> createState() => _ProjectionTableState();
+}
+
+class _ProjectionTableState extends State<_ProjectionTable> {
+  final ScrollController _scrollController = ScrollController();
+  bool _showSwipeHint = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients && _scrollController.position.maxScrollExtent <= 0) {
+        if (mounted) setState(() => _showSwipeHint = false);
+      }
+    });
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    
+    // Hide hint if scrolled to the end (or very close to it)
+    if (maxScroll > 0 && currentScroll >= maxScroll - 20) {
+      if (_showSwipeHint) setState(() => _showSwipeHint = false);
+    } else {
+      if (!_showSwipeHint) setState(() => _showSwipeHint = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (points.length < 2) return const SizedBox.shrink();
+    if (widget.points.length < 2) return const SizedBox.shrink();
 
     return Card(
       child: Padding(
@@ -2054,28 +2109,33 @@ class _ProjectionTable extends StatelessWidget {
                   '연도별 자산 상세',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.swipe_left_rounded, 
-                      size: 14, 
-                      color: isDark ? Colors.grey[500] : const Color(0xFF8E867C),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '밀어서 더 보기',
-                      style: TextStyle(
-                        fontSize: 11,
+                AnimatedOpacity(
+                  opacity: _showSwipeHint ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.swipe_left_rounded, 
+                        size: 14, 
                         color: isDark ? Colors.grey[500] : const Color(0xFF8E867C),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        '밀어서 더 보기',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? Colors.grey[500] : const Color(0xFF8E867C),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             SingleChildScrollView(
+              controller: _scrollController,
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               child: DataTable(
@@ -2089,8 +2149,8 @@ class _ProjectionTable extends StatelessWidget {
                   DataColumn(label: Text('총 자산', style: TextStyle(fontWeight: FontWeight.w700))),
                   DataColumn(label: Text('수익 (수익률)', style: TextStyle(fontWeight: FontWeight.w700))),
                 ],
-                rows: points.where((p) => p.year > 0).map((p) {
-                  final initialAsset = points.first.total;
+                rows: widget.points.where((p) => p.year > 0).map((p) {
+                  final initialAsset = widget.points.first.total;
                   final totalInvested =
                       initialAsset + p.cumulativeContribution;
                   final profit = p.total - totalInvested;

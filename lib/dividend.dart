@@ -36,6 +36,15 @@ class _DividendTabState extends State<DividendTab> {
     final List<_UpcomingDividend> allDividends = [];
     final List<_StockDividendSummary> stockSummaries = [];
 
+    DateTime addMonths(DateTime date, int months) {
+      int newYear = date.year + (date.month + months - 1) ~/ 12;
+      int newMonth = (date.month + months - 1) % 12 + 1;
+      int newDay = date.day;
+      int maxDays = DateTime(newYear, newMonth + 1, 0).day;
+      if (newDay > maxDays) newDay = maxDays;
+      return DateTime(newYear, newMonth, newDay);
+    }
+
     for (var h in widget.holdings) {
       if (h.type == AssetType.cash) continue;
       
@@ -70,49 +79,75 @@ class _DividendTabState extends State<DividendTab> {
         continue;
       }
 
-      // 1년치 기대 배당 계산용 (최근 배당락일로부터 370일 이내인 것만 수집)
-      final ttmDivs = sortedDivs.where((d) => (latestTimestamp - (d['date'] as int)) <= 31968000).toList();
-
-      for (var div in ttmDivs) {
-        final date = DateTime.fromMillisecondsSinceEpoch((div['date'] as int) * 1000);
-        double amount = div['amount'] as double;
-        
-        // 세후 전환 적용 (배당소득세 15.4% 공제)
-        if (_applyTax) {
-          amount = amount * 0.846;
+      // 배당 주기 감지 (Frequency Detection)
+      String freqLabel = '연배당';
+      int frequencyCount = 1;
+      if (sortedDivs.length > 1) {
+        final List<int> intervals = [];
+        for (int i = 0; i < sortedDivs.length - 1; i++) {
+          final d1 = DateTime.fromMillisecondsSinceEpoch((sortedDivs[i+1]['date'] as int) * 1000);
+          final d2 = DateTime.fromMillisecondsSinceEpoch((sortedDivs[i]['date'] as int) * 1000);
+          intervals.add(d2.difference(d1).inDays);
         }
+        final double avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
         
-        final krwAmount = h.quantity * amount * exchangeRate;
+        if (avgInterval <= 45) {
+          freqLabel = '월배당';
+          frequencyCount = 12;
+        } else if (avgInterval <= 120) {
+          freqLabel = '분기배당';
+          frequencyCount = 4;
+        } else if (avgInterval <= 240) {
+          freqLabel = '반기배당';
+          frequencyCount = 2;
+        } else {
+          freqLabel = '연배당';
+          frequencyCount = 1;
+        }
+      }
 
-        // ex-dividend date 기반 지급 예상월 계산
+      // 최신 배당금 1개 추출
+      final latestDiv = sortedDivs.first;
+      final latestDate = DateTime.fromMillisecondsSinceEpoch((latestDiv['date'] as int) * 1000);
+      double rawAmount = latestDiv['amount'] as double;
+      
+      // 세후 전환 적용
+      if (_applyTax) {
+        rawAmount = rawAmount * 0.846;
+      }
+      
+      final krwAmount = h.quantity * rawAmount * exchangeRate;
+      
+      // 미래 12개월(Forward Projection) 캘린더 생성
+      final int monthStep = 12 ~/ frequencyCount;
+      for (int i = 1; i <= frequencyCount; i++) {
+        final projectedDate = addMonths(latestDate, monthStep * i);
+        
         DateTime paymentDate;
         if (h.symbol != null && (h.symbol!.endsWith('.KS') || h.symbol!.endsWith('.KQ'))) {
-          if (date.month == 12) {
-            // 결산 배당: 보통 다음 해 4월 중순(약 110일 후) 지급
-            paymentDate = DateTime(date.year + 1, 4, 15);
+          if (projectedDate.month == 12) {
+            paymentDate = DateTime(projectedDate.year + 1, 4, 15);
           } else {
-            // 분기 배당: 삼성전자 등 3, 6, 9월 말락일은 약 60일 후 지급
-            paymentDate = date.add(const Duration(days: 60));
+            paymentDate = projectedDate.add(const Duration(days: 60));
           }
         } else {
-          // 해외 주식 (미국 등): 보통 배당락일 후 약 15일 이내 지급
-          paymentDate = date.add(const Duration(days: 15));
+          paymentDate = projectedDate.add(const Duration(days: 15));
         }
-
+        
         monthlyDividends[paymentDate.month] = (monthlyDividends[paymentDate.month] ?? 0.0) + krwAmount;
         annualTotal += krwAmount;
 
         stockAnnualKrw += krwAmount;
-        stockAnnualForeign += (h.quantity * amount);
+        stockAnnualForeign += (h.quantity * rawAmount);
         paymentMonths.add(paymentDate.month);
 
         final upcomingDiv = _UpcomingDividend(
           name: h.name,
           symbol: h.symbol ?? '',
-          amountPerShare: amount,
-          totalAmount: h.quantity * amount,
+          amountPerShare: rawAmount,
+          totalAmount: h.quantity * rawAmount,
           currency: h.effectiveCurrency,
-          date: date,
+          date: projectedDate,
           paymentDate: paymentDate,
           krwAmount: krwAmount,
         );
@@ -123,34 +158,6 @@ class _DividendTabState extends State<DividendTab> {
 
       if (stockAnnualKrw > 0) {
         final monthsList = paymentMonths.toList()..sort();
-        
-        // 2개년 전체 배당 이력을 활용하여 배당락일 간의 평균 간격을 계산해 배당 주기 감지
-        String freqLabel = '연배당';
-        if (sortedDivs.length > 1) {
-          final chronological = List<Map<String, dynamic>>.from(sortedDivs)
-            ..sort((a, b) => (a['date'] as int).compareTo(b['date'] as int));
-          
-          final List<int> intervals = [];
-          for (int i = 0; i < chronological.length - 1; i++) {
-            final d1 = DateTime.fromMillisecondsSinceEpoch((chronological[i]['date'] as int) * 1000);
-            final d2 = DateTime.fromMillisecondsSinceEpoch((chronological[i+1]['date'] as int) * 1000);
-            intervals.add(d2.difference(d1).inDays);
-          }
-          final double avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
-          
-          if (avgInterval <= 45) {
-            freqLabel = '월배당';
-          } else if (avgInterval <= 120) {
-            freqLabel = '분기배당';
-          } else if (avgInterval <= 240) {
-            freqLabel = '반기배당';
-          } else {
-            freqLabel = '연배당';
-          }
-        } else if (sortedDivs.length == 1) {
-          freqLabel = '연배당';
-        }
-
         stockDividends.sort((a, b) => b.date.compareTo(a.date));
 
         stockSummaries.add(_StockDividendSummary(
@@ -278,19 +285,70 @@ class _DividendTabState extends State<DividendTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      _selectedMonth == null ? '월별 예상 배당금 흐름' : '$_selectedMonth월 배당금 흐름',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          _selectedMonth == null ? '월별 예상 배당금 흐름' : '$_selectedMonth월 배당금 흐름',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, color: Theme.of(context).colorScheme.primary),
+                                    const SizedBox(width: 8),
+                                    const Flexible(
+                                      child: Text(
+                                        '예상 배당금 산출 방식',
+                                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                content: Text(
+                                  '종목별로 가장 최근에 지급된 배당금을 기준으로, 각 배당 주기(월/분기/반기/연)에 맞춰 미래 1년 치 예상 배당액을 산출합니다.',
+                                  style: TextStyle(
+                                    height: 1.5,
+                                    fontSize: 14,
+                                    color: isDark ? Colors.white70 : Colors.black87,
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('확인', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          child: Icon(
+                            Icons.help_outline,
+                            size: 16,
+                            color: isDark ? Colors.grey[400] : Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
-                    if (_selectedMonth != null)
-                      TextButton(
+                    Visibility(
+                      visible: _selectedMonth != null,
+                      maintainSize: true,
+                      maintainAnimation: true,
+                      maintainState: true,
+                      child: TextButton(
                         onPressed: () => setState(() => _selectedMonth = null),
                         child: const Text('전체보기', style: TextStyle(color: Color(0xFF176B5B))),
-                      )
+                      ),
+                    )
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -507,18 +565,27 @@ class _DividendTabState extends State<DividendTab> {
                             : '${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.totalAmount.toStringAsFixed(2)}';
                             
                         final displayTotal = (_showForeignInKrw || div.currency == 'KRW')
-                            ? '₩${_formatNumber(div.krwAmount.round())}' + (div.currency != 'KRW' ? ' ($formattedNativeTotal)' : '')
+                            ? '₩${_formatNumber(div.krwAmount.round())}'
                             : formattedNativeTotal;
+                            
+                        String displayAmountPerShare;
+                        if (div.currency == 'KRW') {
+                          displayAmountPerShare = '주당 ${_formatNumber(div.amountPerShare.round())}원';
+                        } else if (_showForeignInKrw) {
+                          final double exchangeRate = div.totalAmount > 0 ? (div.krwAmount / div.totalAmount) : 1350.0;
+                          final double krwPerShare = div.amountPerShare * exchangeRate;
+                          displayAmountPerShare = '주당 ${_formatNumber(krwPerShare.round())}원';
+                        } else {
+                          displayAmountPerShare = '주당 ${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.amountPerShare.toStringAsFixed(2)}';
+                        }
                         
                         return _buildDividendRow(
                           context,
                           symbol: div.symbol,
                           name: div.name,
-                          amount: div.currency == 'KRW' 
-                              ? '주당 ${_formatNumber(div.amountPerShare.round())}원'
-                              : '주당 ${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.amountPerShare.toStringAsFixed(2)}',
+                          amount: displayAmountPerShare,
                           total: displayTotal,
-                          dateText: '예상 지급: ${div.paymentDate.month}/${div.paymentDate.day} | 배당락: ${div.date.month}/${div.date.day}',
+                          dateText: '예상 지급: ${div.paymentDate.year}/${div.paymentDate.month}/${div.paymentDate.day} | 배당락: ${div.date.year}/${div.date.month}/${div.date.day}',
                         );
                       },
                     ),
