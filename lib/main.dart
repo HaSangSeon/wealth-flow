@@ -1137,28 +1137,31 @@ class AssetManagementTab extends StatelessWidget {
                               child: ListTile(
                                 onTap: () => onEdit(holding),
                                 contentPadding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
-                                title: Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        holding.name,
-                                        style: const TextStyle(
+                                title: Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: holding.name,
+                                        style: TextStyle(
                                             fontWeight: FontWeight.w800,
-                                            fontSize: 16),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                            fontSize: 16,
+                                            color: isDark ? Colors.white : Colors.black87),
                                       ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '(${holding.formatOriginalPrice()} / 주)',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
-                                      ),
-                                    ),
-                                  ],
+                                      if (holding.symbol != null && holding.symbol!.isNotEmpty) ...[
+                                        const TextSpan(text: ' '),
+                                        TextSpan(
+                                          text: holding.symbol!,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 subtitle: Padding(
                                   padding: const EdgeInsets.only(top: 6),
@@ -1170,15 +1173,25 @@ class AssetManagementTab extends StatelessWidget {
                                         TextSpan(
                                           children: [
                                             TextSpan(
-                                              text: '${holding.account.label} · ${holding.type.label} · ',
+                                              text: holding.type == AssetType.cash
+                                                  ? holding.account.label
+                                                  : '${holding.account.label} · ',
                                             ),
-                                            TextSpan(
-                                              text: '${formatNumber(holding.quantity)}주',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w900,
-                                                color: Theme.of(context).colorScheme.primary,
+                                            if (holding.type != AssetType.cash) ...[
+                                              TextSpan(
+                                                text: '${formatNumber(holding.quantity)}주',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Theme.of(context).colorScheme.primary,
+                                                ),
                                               ),
-                                            ),
+                                              TextSpan(
+                                                text: ' (주당 ${holding.formatOriginalPrice()})',
+                                                style: TextStyle(
+                                                  color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                                                ),
+                                              ),
+                                            ],
                                           ],
                                         ),
                                         style: TextStyle(
@@ -1193,7 +1206,8 @@ class AssetManagementTab extends StatelessWidget {
                                         style: TextStyle(
                                           color: Theme.of(context).colorScheme.primary,
                                           fontWeight: FontWeight.w900,
-                                          fontSize: 15,
+                                          fontSize: 16,
+                                          height: 1.3,
                                         ),
                                       ),
                                     ],
@@ -2227,9 +2241,11 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
   Future<void> _onSelectSearchResult(YahooFinanceSearchResult result) async {
     if (!mounted) return;
     FocusScope.of(context).unfocus(); // 종목 선택 완료 시 키보드를 선제적으로 닫음
-    _nameController.text = result.shortname;
-    _selectedSymbol = result.symbol;
-    _searchResults.value = [];
+    setState(() {
+      _nameController.text = result.shortname;
+      _selectedSymbol = result.symbol;
+      _searchResults.value = [];
+    });
     _isLoadingPrice.value = true;
 
     try {
@@ -2292,11 +2308,28 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-            Text(
-              isEditMode ? '자산 수정' : '자산 추가',
-              style:
-                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        isEditMode ? '자산 수정' : '자산 추가',
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w800),
+                      ),
+                      if (_selectedSymbol != null && _selectedSymbol!.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedSymbol!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
             const SizedBox(height: 16),
             TextFormField(
               focusNode: _searchFocusNode,

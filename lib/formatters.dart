@@ -6,13 +6,13 @@ String formatCurrency(double value) {
   final absolute = value.abs();
   if (absolute >= 100000000) {
     final eok = absolute / 100000000;
-    return '$sign₩${formatNumber(eok)}억';
+    return '$sign${formatNumber(eok)}억 원';
   }
   if (absolute >= 10000) {
     final man = absolute / 10000;
-    return '$sign₩${formatNumber(man)}만';
+    return '$sign${formatNumber(man)}만 원';
   }
-  return '$sign₩${formatNumber(absolute)}';
+  return '$sign${formatNumber(absolute)}원';
 }
 
 /// 1원 단위까지 표시하는 원화 포맷
@@ -81,4 +81,26 @@ class NumberInputFormatter extends TextInputFormatter {
       selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
+}
+
+/// 소수점을 그대로 보존하면서 콤마만 포맷팅하는 함수 (입력 필드용)
+String formatFullPrecision(double value) {
+  final valStr = value.toString();
+  final parts = valStr.split('.');
+  final integerPart = parts[0];
+  final decimalPart = parts.length > 1 ? '.${parts[1]}' : '';
+  
+  final chars = integerPart.replaceAll('-', '').split('').reversed.toList();
+  final buffer = StringBuffer();
+  for (var i = 0; i < chars.length; i++) {
+    if (i > 0 && i % 3 == 0) buffer.write(',');
+    buffer.write(chars[i]);
+  }
+  final formattedInteger = buffer.toString().split('').reversed.join();
+  final sign = value < 0 ? '-' : '';
+  
+  if (decimalPart == '.0') {
+    return '$sign$formattedInteger';
+  }
+  return '$sign$formattedInteger$decimalPart';
 }

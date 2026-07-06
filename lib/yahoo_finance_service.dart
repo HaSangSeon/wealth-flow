@@ -238,9 +238,6 @@ class YahooFinanceService {
             
             if (dividends.isNotEmpty) {
               dividends.sort((a, b) => (b['date'] as int).compareTo(a['date'] as int));
-              final latestDate = dividends.first['date'] as int;
-              // Keep only dividends within ~370 days of the most recent one (31968000 seconds)
-              dividends = dividends.where((d) => (latestDate - (d['date'] as int)) <= 31968000).toList();
             }
           }
 
