@@ -869,7 +869,6 @@ class AssetManagementTab extends StatelessWidget {
                               nextMode = ThemeMode.light;
                             }
                             themeNotifier.value = nextMode;
-                            final storage = StorageService();
                             storage.themeMode = nextMode.index;
                           },
                           icon: Icon(

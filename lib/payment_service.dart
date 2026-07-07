@@ -5,7 +5,7 @@ import 'models.dart';
 
 class PaymentService {
   // TODO: Replace with the actual API Key generated in the RevenueCat console
-  static const String _googleApiKey = "goog_placeholder"; 
+  static const String _googleApiKey = "goog_YugkYTfxkNyGuqsUUXHScHDTANb"; 
   static const String _iosApiKey = "appl_placeholder"; 
 
   static final ValueNotifier<bool> isPremiumNotifier = ValueNotifier<bool>(false);
