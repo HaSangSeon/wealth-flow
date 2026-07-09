@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:hive/hive.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// 계좌 구분
 enum AccountType {
@@ -236,6 +238,22 @@ class ProjectionPoint {
   final double cumulativeContribution;
 }
 
+/// 프로필 (가족 계좌 분리)
+class Profile {
+  Profile({required this.id, required this.name, this.avatarPath});
+  
+  String id;
+  String name;
+  String? avatarPath;
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'avatarPath': avatarPath};
+  factory Profile.fromJson(Map<String, dynamic> json) => Profile(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    avatarPath: json['avatarPath'] as String?,
+  );
+}
+
 /// Hive 기반 로컬 저장소
 class StorageService {
   static const _holdingsKey = 'holdings';
@@ -244,23 +262,74 @@ class StorageService {
   static const _lastSyncedKey = 'last_synced_at';
   static const _displayUsdKey = 'display_usd';
   static const _exchangeRateKey = 'last_exchange_rate';
+  static const _profilesKey = 'profiles';
+  static const _activeProfileIdKey = 'active_profile_id';
   static const _boxName = 'wealth_flow';
 
   late Box _box;
+  late String documentDirPath;
 
   Future<void> init() async {
     _box = await Hive.openBox(_boxName);
+    documentDirPath = (await getApplicationDocumentsDirectory()).path;
+  }
+
+  String? getAvatarAbsolutePath(String? path) {
+    if (path == null) return null;
+    final fileName = path.contains('/') ? path.split('/').last : path;
+    return '$documentDirPath/$fileName';
+  }
+
+  /// 프로필 로드
+  List<Profile> get profiles {
+    final raw = _box.get(_profilesKey);
+    if (raw == null) {
+      return [Profile(id: 'default', name: '내 프로필')];
+    }
+    try {
+      final list = jsonDecode(raw as String) as List<dynamic>;
+      return list.map((item) => Profile.fromJson(item as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [Profile(id: 'default', name: '내 프로필')];
+    }
+  }
+
+  void saveProfiles(List<Profile> profilesList) {
+    final jsonList = profilesList.map((p) => p.toJson()).toList();
+    _box.put(_profilesKey, jsonEncode(jsonList));
+  }
+
+  String get activeProfileId => _box.get(_activeProfileIdKey, defaultValue: 'default') as String;
+  set activeProfileId(String value) => _box.put(_activeProfileIdKey, value);
+
+  String get _currentHoldingsKey => activeProfileId == 'default' ? _holdingsKey : '${_holdingsKey}_$activeProfileId';
+  String get _currentSettingsKey => activeProfileId == 'default' ? _settingsKey : '${_settingsKey}_$activeProfileId';
+
+  /// 모든 프로필의 총 자산 개수 조회 (프리미엄 제한용)
+  int getTotalHoldingsCount() {
+    int count = 0;
+    for (var profile in profiles) {
+      final key = profile.id == 'default' ? _holdingsKey : '${_holdingsKey}_${profile.id}';
+      final raw = _box.get(key);
+      if (raw != null) {
+        try {
+          final list = jsonDecode(raw as String) as List<dynamic>;
+          count += list.length;
+        } catch (_) {}
+      }
+    }
+    return count;
   }
 
   /// 보유 자산 저장
   void saveHoldings(List<Holding> holdings) {
     final jsonList = holdings.map((h) => h.toJson()).toList();
-    _box.put(_holdingsKey, jsonEncode(jsonList));
+    _box.put(_currentHoldingsKey, jsonEncode(jsonList));
   }
 
   /// 보유 자산 로드
   List<Holding> loadHoldings() {
-    final raw = _box.get(_holdingsKey);
+    final raw = _box.get(_currentHoldingsKey);
     if (raw == null) return [];
     try {
       final list = jsonDecode(raw as String) as List<dynamic>;
@@ -274,12 +343,12 @@ class StorageService {
 
   /// 시뮬레이션 설정 저장
   void saveSettings(SimulationSettings settings) {
-    _box.put(_settingsKey, jsonEncode(settings.toJson()));
+    _box.put(_currentSettingsKey, jsonEncode(settings.toJson()));
   }
 
   /// 시뮬레이션 설정 로드
   SimulationSettings loadSettings() {
-    final raw = _box.get(_settingsKey);
+    final raw = _box.get(_currentSettingsKey);
     if (raw == null) return SimulationSettings();
     try {
       final json = jsonDecode(raw as String) as Map<String, dynamic>;

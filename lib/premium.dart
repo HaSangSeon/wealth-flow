@@ -77,9 +77,8 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
                   children: [
                     // Developer Easter Egg: Long press to toggle premium status
                     GestureDetector(
-                      onLongPress: kReleaseMode 
-                          ? null 
-                          : () {
+                      onLongPress: const bool.fromEnvironment('DEV_MODE', defaultValue: false)
+                          ? () {
                               setState(() {
                                 widget.storage.isPremium = !widget.storage.isPremium;
                               });
@@ -94,7 +93,8 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
                                 ),
                               );
                               Navigator.pop(context, true);
-                            },
+                            }
+                          : null,
                       child: const Text(
                         '👑 Wealth Flow\nPremium',
                         style: TextStyle(
@@ -126,6 +126,13 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
                       icon: Icons.calendar_month,
                       title: '배당 캘린더 & 심층 분석',
                       subtitle: '월별 배당금 현금흐름과 포트폴리오 예상 배당 수익률을 한눈에 파악하세요.',
+                    ),
+                    const SizedBox(height: 20),
+                    _buildFeatureItem(
+                      context,
+                      icon: Icons.people_outline,
+                      title: '가족 프로필 무제한 생성',
+                      subtitle: '무료 버전의 프로필 2개 제한을 해제하고 배우자, 자녀 등의 개별 계좌를 무제한으로 분리 관리해 보세요.',
                     ),
                     const SizedBox(height: 20),
                     InkWell(

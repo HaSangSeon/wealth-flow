@@ -1,8 +1,11 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'formatters.dart';
 import 'dividend.dart';
@@ -353,6 +356,60 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     });
   }
 
+  void _loadDataForProfile() {
+    setState(() {
+      _holdings = widget.storage.loadHoldings();
+      _settings = widget.storage.loadSettings();
+    });
+    _checkAndSyncPrices();
+  }
+
+  void _switchProfile(String profileId) {
+    widget.storage.activeProfileId = profileId;
+    _loadDataForProfile();
+  }
+
+  void _openProfileSelectionSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return ProfileSelectionSheet(
+          storage: widget.storage,
+          onProfileSelected: (profileId) {
+            Navigator.pop(context);
+            _switchProfile(profileId);
+          },
+          onProfileAdded: () async {
+            Navigator.pop(context);
+            if (!widget.storage.isPremium && widget.storage.profiles.length >= 2) {
+              await _showPremiumLimitDialog(
+                '무료 버전에서는 최대 2개의 프로필까지만 생성할 수 있습니다.\n\n프리미엄 멤버십으로 업그레이드하여 한계 없는 무제한 프로필 추가를 경험해 보세요!',
+              );
+            } else {
+              _openAddProfileDialog();
+            }
+          },
+          onProfileEdited: () {
+            setState(() {});
+          },
+        );
+      },
+    );
+  }
+
+  void _openAddProfileDialog() async {
+    final newId = await showDialog<String>(
+      context: context,
+      builder: (context) => AddProfileDialog(storage: widget.storage),
+    );
+    if (newId != null) {
+      _switchProfile(newId);
+    }
+  }
+
   Future<void> _checkAndSyncPrices() async {
     final lastSyncedAt = widget.storage.lastSyncedAt;
     if (lastSyncedAt == null || DateTime.now().difference(lastSyncedAt).inMinutes >= 5) {
@@ -479,6 +536,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 onDelete: _confirmDelete,
                 onRefresh: _syncPrices,
                 onPremiumChanged: () => setState(() {}),
+                onProfileTap: _openProfileSelectionSheet,
               ),
               PensionTaxTab(
                 holdings: _holdings,
@@ -562,63 +620,69 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
-  Future<void> _openAddHoldingSheet() async {
-    // 프리미엄 회원이 아닌 경우, 자산 등록 개수를 최대 5개로 제한
-    if (!widget.storage.isPremium && _holdings.length >= 5) {
-      final upgrade = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Theme.of(context).brightness == Brightness.dark 
-              ? const Color(0xFF1E1E1E) 
-              : const Color(0xFFF9F8F6),
-          title: const Row(
-            children: [
-              Icon(Icons.lock_outline, color: Color(0xFFEAA622)),
-              SizedBox(width: 8),
-              Text('👑 프리미엄 제한', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: const Text(
-            '무료 버전에서는 최대 5개의 자산까지만 등록할 수 있습니다.\n\n프리미엄 멤버십으로 업그레이드하여 한계 없는 무제한 자산 추가를 경험해 보세요!',
-            style: TextStyle(height: 1.5),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(
-                '나중에',
-                style: TextStyle(
-                  color: Theme.of(context).brightness == Brightness.dark 
-                      ? Colors.white54 
-                      : Colors.black54
-                ),
-              ),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF176B5B),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text('프리미엄 혜택 보기'),
-            ),
+  Future<void> _showPremiumLimitDialog(String content) async {
+    final upgrade = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark 
+            ? const Color(0xFF1E1E1E) 
+            : const Color(0xFFF9F8F6),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_outline, color: Color(0xFFEAA622)),
+            SizedBox(width: 8),
+            Text('👑 프리미엄 제한', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-      );
-
-      if (upgrade == true && mounted) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PremiumSubscriptionScreen(storage: widget.storage),
+        content: Text(
+          content,
+          style: const TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              '나중에',
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark 
+                    ? Colors.white54 
+                    : Colors.black54
+              ),
+            ),
           ),
-        );
-        if (mounted) {
-          setState(() {});
-        }
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF176B5B),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('프리미엄 혜택 보기'),
+          ),
+        ],
+      ),
+    );
+
+    if (upgrade == true && mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PremiumSubscriptionScreen(storage: widget.storage),
+        ),
+      );
+      if (mounted) {
+        setState(() {});
       }
+    }
+  }
+
+  Future<void> _openAddHoldingSheet() async {
+    // 프리미엄 회원이 아닌 경우, 자산 등록 개수를 총합 최대 5개로 제한
+    if (!widget.storage.isPremium && widget.storage.getTotalHoldingsCount() >= 5) {
+      await _showPremiumLimitDialog(
+        '무료 버전에서는 모든 프로필을 합쳐 총 5개의 자산까지만 등록할 수 있습니다.\n\n프리미엄 멤버십으로 업그레이드하여 한계 없는 무제한 자산 추가를 경험해 보세요!',
+      );
       return;
     }
 
@@ -750,6 +814,7 @@ class AssetManagementTab extends StatelessWidget {
     required this.onDelete,
     required this.onRefresh,
     required this.onPremiumChanged,
+    required this.onProfileTap,
   });
 
   final StorageService storage;
@@ -765,6 +830,7 @@ class AssetManagementTab extends StatelessWidget {
   final ValueChanged<Holding> onDelete;
   final Future<void> Function() onRefresh;
   final VoidCallback onPremiumChanged;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
@@ -791,32 +857,62 @@ class AssetManagementTab extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary,
-                            borderRadius: BorderRadius.circular(8),
+                        GestureDetector(
+                          onTap: onProfileTap,
+                          child: Builder(
+                            builder: (context) {
+                              final activeProfile = storage.profiles.firstWhere(
+                                (p) => p.id == storage.activeProfileId,
+                                orElse: () => storage.profiles.first,
+                              );
+                              final avatarPath = activeProfile.avatarPath;
+                              final avatarAbsPath = storage.getAvatarAbsolutePath(avatarPath);
+                              final hasAvatar = avatarAbsPath != null && File(avatarAbsPath).existsSync();
+                              return Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                  image: hasAvatar
+                                      ? DecorationImage(
+                                          image: FileImage(File(avatarAbsPath)),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                                child: !hasAvatar
+                                    ? const Icon(Icons.account_balance_wallet,
+                                        color: Colors.white)
+                                    : null,
+                              );
+                            },
                           ),
-                          child: const Icon(Icons.account_balance_wallet,
-                              color: Colors.white),
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Wealth Flow',
-                                style: TextStyle(
-                                    fontSize: 20, fontWeight: FontWeight.w800),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                '내 자산 입력 및 관리',
-                                style: TextStyle(color: Colors.grey, fontSize: 11),
-                              ),
-                            ],
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: onProfileTap,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      storage.profiles.firstWhere((p) => p.id == storage.activeProfileId, orElse: () => storage.profiles.first).name,
+                                      style: const TextStyle(
+                                          fontSize: 20, fontWeight: FontWeight.w800),
+                                    ),
+                                    const Icon(Icons.arrow_drop_down),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  '내 자산 입력 및 관리',
+                                  style: TextStyle(color: Colors.grey, fontSize: 11),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         GestureDetector(
@@ -3663,3 +3759,359 @@ class DonutChartPainter extends CustomPainter {
   }
 }
 
+
+class ProfileSelectionSheet extends StatefulWidget {
+  final StorageService storage;
+  final ValueChanged<String> onProfileSelected;
+  final VoidCallback onProfileAdded;
+  final VoidCallback onProfileEdited;
+
+  const ProfileSelectionSheet({
+    super.key,
+    required this.storage,
+    required this.onProfileSelected,
+    required this.onProfileAdded,
+    required this.onProfileEdited,
+  });
+
+  @override
+  State<ProfileSelectionSheet> createState() => _ProfileSelectionSheetState();
+}
+
+class _ProfileSelectionSheetState extends State<ProfileSelectionSheet> {
+  @override
+  Widget build(BuildContext context) {
+    final profiles = widget.storage.profiles;
+    final activeId = widget.storage.activeProfileId;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '프로필 선택',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 100,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: profiles.length + 1,
+              separatorBuilder: (context, index) => const SizedBox(width: 16),
+              itemBuilder: (context, index) {
+                if (index == profiles.length) {
+                  return GestureDetector(
+                    onTap: widget.onProfileAdded,
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.grey[800] : Colors.grey[200],
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.add, size: 30),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('추가', style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  );
+                }
+
+                final profile = profiles[index];
+                final isActive = profile.id == activeId;
+                final avatarAbsPath = widget.storage.getAvatarAbsolutePath(profile.avatarPath);
+                final hasAvatar = avatarAbsPath != null && File(avatarAbsPath).existsSync();
+
+                return GestureDetector(
+                  onTap: () => widget.onProfileSelected(profile.id),
+                  child: Column(
+                    children: [
+                      Stack(
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: isActive ? Theme.of(context).colorScheme.primary : (isDark ? Colors.grey[800] : Colors.grey[300]),
+                              shape: BoxShape.circle,
+                              border: isActive ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2) : null,
+                              image: hasAvatar
+                                  ? DecorationImage(
+                                      image: FileImage(File(avatarAbsPath)),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: !hasAvatar
+                                ? Icon(
+                                    Icons.person,
+                                    color: isActive ? Colors.white : (isDark ? Colors.white70 : Colors.black54),
+                                    size: 30,
+                                  )
+                                : null,
+                          ),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: GestureDetector(
+                              onTap: () async {
+                                final edited = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => EditProfileDialog(
+                                    profile: profile,
+                                    storage: widget.storage,
+                                  ),
+                                );
+                                if (edited == true && mounted) {
+                                  setState(() {});
+                                  widget.onProfileEdited();
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.secondary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.edit, size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        profile.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                          color: isActive ? Theme.of(context).colorScheme.primary : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
+
+class EditProfileDialog extends StatefulWidget {
+  final Profile profile;
+  final StorageService storage;
+
+  const EditProfileDialog({super.key, required this.profile, required this.storage});
+
+  @override
+  State<EditProfileDialog> createState() => _EditProfileDialogState();
+}
+
+class _EditProfileDialogState extends State<EditProfileDialog> {
+  late TextEditingController _nameController;
+  String? _avatarPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.profile.name);
+    _avatarPath = widget.profile.avatarPath;
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (pickedFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
+      final savedImage = await File(pickedFile.path).copy('${appDir.path}/$fileName');
+      
+      setState(() {
+        _avatarPath = fileName;
+      });
+    }
+  }
+
+  void _saveProfile() {
+    final name = _nameController.text.trim();
+    if (name.isNotEmpty) {
+      final profiles = widget.storage.profiles;
+      final index = profiles.indexWhere((p) => p.id == widget.profile.id);
+      if (index != -1) {
+        profiles[index].name = name;
+        profiles[index].avatarPath = _avatarPath;
+        widget.storage.saveProfiles(profiles);
+        Navigator.pop(context, true);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarAbsPath = widget.storage.getAvatarAbsolutePath(_avatarPath);
+    final hasAvatar = avatarAbsPath != null && File(avatarAbsPath).existsSync();
+
+    return AlertDialog(
+      title: const Text('프로필 편집'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: _pickImage,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                shape: BoxShape.circle,
+                image: hasAvatar
+                    ? DecorationImage(
+                        image: FileImage(File(avatarAbsPath)),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
+              child: !hasAvatar
+                  ? const Icon(Icons.camera_alt, size: 40, color: Colors.grey)
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _nameController,
+            decoration: const InputDecoration(
+              labelText: '프로필 이름',
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: _saveProfile,
+          child: const Text('저장'),
+        ),
+      ],
+    );
+  }
+}
+
+class AddProfileDialog extends StatefulWidget {
+  final StorageService storage;
+
+  const AddProfileDialog({super.key, required this.storage});
+
+  @override
+  State<AddProfileDialog> createState() => _AddProfileDialogState();
+}
+
+class _AddProfileDialogState extends State<AddProfileDialog> {
+  late TextEditingController _nameController;
+  String? _avatarPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (pickedFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
+      final savedImage = await File(pickedFile.path).copy('${appDir.path}/$fileName');
+      
+      setState(() {
+        _avatarPath = fileName;
+      });
+    }
+  }
+
+  void _addProfile() {
+    final name = _nameController.text.trim();
+    if (name.isNotEmpty) {
+      final profiles = widget.storage.profiles;
+      final newId = DateTime.now().millisecondsSinceEpoch.toString();
+      final newProfile = Profile(id: newId, name: name, avatarPath: _avatarPath);
+      profiles.add(newProfile);
+      widget.storage.saveProfiles(profiles);
+      Navigator.pop(context, newId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarAbsPath = widget.storage.getAvatarAbsolutePath(_avatarPath);
+    final hasAvatar = avatarAbsPath != null && File(avatarAbsPath).existsSync();
+    
+    return AlertDialog(
+      title: const Text('새 프로필 추가'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: _pickImage,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                shape: BoxShape.circle,
+                image: hasAvatar
+                    ? DecorationImage(
+                        image: FileImage(File(avatarAbsPath)),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
+              child: !hasAvatar
+                  ? const Icon(Icons.camera_alt, size: 40, color: Colors.grey)
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _nameController,
+            decoration: const InputDecoration(
+              labelText: '프로필 이름',
+              hintText: '예: 가족, 비상금',
+            ),
+            autofocus: true,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: _addProfile,
+          child: const Text('추가'),
+        ),
+      ],
+    );
+  }
+}
