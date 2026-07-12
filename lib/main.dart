@@ -421,8 +421,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     if (_isSyncing) return;
     setState(() => _isSyncing = true);
 
-    bool hasUpdates = false;
     final yahooService = YahooFinanceService();
+
+    // Always fetch the latest USD-KRW exchange rate first on sync
+    try {
+      final double? usdRate = await yahooService.fetchExchangeRate('USD');
+      if (usdRate != null) {
+        widget.storage.lastExchangeRate = usdRate;
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch USD exchange rate: $e");
+    }
+
+    bool hasUpdates = false;
     
     for (int i = 0; i < _holdings.length; i++) {
       final holding = _holdings[i];

@@ -55,7 +55,7 @@ android {
 
     packaging {
         jniLibs {
-            keepDebugSymbols.add("**/*.so")
+            doNotStrip.add("**/*.so")
         }
     }
 }
