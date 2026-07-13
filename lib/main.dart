@@ -561,6 +561,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 monthlyContribution: _settings.monthlyContribution,
                 contributionGrowth: _settings.contributionGrowth,
                 projectionPoints: _projection,
+                targetAmount: _settings.targetAmount,
+                targetYears: _settings.targetYears,
                 onAnnualReturnChanged: (v) => setState(() {
                   _settings.annualReturn = v;
                   _saveAll();
@@ -575,6 +577,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 }),
                 onYearsChanged: (v) => setState(() {
                   _settings.years = v;
+                  _saveAll();
+                }),
+                onTargetAmountChanged: (v) => setState(() {
+                  _settings.targetAmount = v;
+                  _saveAll();
+                }),
+                onTargetYearsChanged: (v) => setState(() {
+                  _settings.targetYears = v;
                   _saveAll();
                 }),
               ),
@@ -1385,7 +1395,7 @@ class AssetManagementTab extends StatelessWidget {
 
 // ─── 시뮬레이션 탭 ────────────────────────────────────────
 
-class SimulationTab extends StatelessWidget {
+class SimulationTab extends StatefulWidget {
   const SimulationTab({
     super.key,
     required this.currentValue,
@@ -1396,10 +1406,14 @@ class SimulationTab extends StatelessWidget {
     required this.monthlyContribution,
     required this.contributionGrowth,
     required this.projectionPoints,
+    required this.targetAmount,
+    required this.targetYears,
     required this.onAnnualReturnChanged,
     required this.onMonthlyContributionChanged,
     required this.onContributionGrowthChanged,
     required this.onYearsChanged,
+    required this.onTargetAmountChanged,
+    required this.onTargetYearsChanged,
   });
 
   final double currentValue;
@@ -1410,19 +1424,571 @@ class SimulationTab extends StatelessWidget {
   final double monthlyContribution;
   final double contributionGrowth;
   final List<ProjectionPoint> projectionPoints;
+  final double targetAmount;
+  final int targetYears;
   final ValueChanged<double> onAnnualReturnChanged;
   final ValueChanged<double> onMonthlyContributionChanged;
   final ValueChanged<double> onContributionGrowthChanged;
   final ValueChanged<int> onYearsChanged;
+  final ValueChanged<double> onTargetAmountChanged;
+  final ValueChanged<int> onTargetYearsChanged;
+
+  @override
+  State<SimulationTab> createState() => _SimulationTabState();
+}
+
+class _SimulationTabState extends State<SimulationTab> {
+  bool _showGoalPlanner = false;
+
+  String _formatKoreanAmount(double amount) {
+    if (amount >= 100000000) {
+      final double eok = amount / 100000000;
+      final int eokInt = eok.floor();
+      final double man = (amount % 100000000) / 10000;
+      if (man > 0) {
+        return '$eokInt억 ${man.round()}만 원';
+      } else {
+        return '$eokInt억 원';
+      }
+    } else {
+      final double man = amount / 10000;
+      return '${man.round()}만 원';
+    }
+  }
+
+  double _calculateFutureValue(double start, double monthly, double rate, double growth, int yearsCount) {
+    double total = start;
+    double monthlyContrib = monthly;
+    for (var year = 1; year <= yearsCount; year++) {
+      final annualContribution = monthlyContrib * 12;
+      total = (total + annualContribution) * (1 + rate / 100);
+      monthlyContrib *= 1 + growth / 100;
+    }
+    return total;
+  }
+
+  double _calculateRequiredMonthlyContribution(int remainingYears) {
+    double low = widget.monthlyContribution;
+    double high = widget.monthlyContribution + (widget.targetAmount / 12);
+    for (int i = 0; i < 50; i++) {
+      double mid = (low + high) / 2;
+      double fv = _calculateFutureValue(widget.currentValue, mid, widget.annualReturn, widget.contributionGrowth, remainingYears);
+      if (fv < widget.targetAmount) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return high;
+  }
+
+  double _calculateMinimumMonthlyContribution(int remainingYears) {
+    double low = 0.0;
+    double high = widget.monthlyContribution;
+    for (int i = 0; i < 50; i++) {
+      double mid = (low + high) / 2;
+      double fv = _calculateFutureValue(widget.currentValue, mid, widget.annualReturn, widget.contributionGrowth, remainingYears);
+      if (fv < widget.targetAmount) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return high;
+  }
+
+  int _calculateRequiredYears(int remainingYears) {
+    for (int y = remainingYears; y <= 100; y++) {
+      double fv = _calculateFutureValue(widget.currentValue, widget.monthlyContribution, widget.annualReturn, widget.contributionGrowth, y);
+      if (fv >= widget.targetAmount) {
+        return y;
+      }
+    }
+    return remainingYears + 10;
+  }
+
+  int _calculateMinimumYears(int remainingYears) {
+    for (int y = 1; y <= remainingYears; y++) {
+      double fv = _calculateFutureValue(widget.currentValue, widget.monthlyContribution, widget.annualReturn, widget.contributionGrowth, y);
+      if (fv >= widget.targetAmount) {
+        return y;
+      }
+    }
+    return remainingYears;
+  }
+
+  double _calculateRequiredReturn(int remainingYears) {
+    double low = widget.annualReturn;
+    double high = 100.0;
+    for (int i = 0; i < 50; i++) {
+      double mid = (low + high) / 2;
+      double fv = _calculateFutureValue(widget.currentValue, widget.monthlyContribution, mid, widget.contributionGrowth, remainingYears);
+      if (fv < widget.targetAmount) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return high;
+  }
+
+  Widget _buildTabToggle(bool isDark) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[200],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Stack(
+        children: [
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            alignment: _showGoalPlanner ? Alignment.centerRight : Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              child: Container(
+  Widget _buildGoalPlannerView(BuildContext context, bool isDark) {
+    final int currentYear = DateTime.now().year;
+    final int targetYear = widget.targetYears <= 100 ? currentYear + widget.targetYears : widget.targetYears;
+    final int remainingYears = (targetYear - currentYear).clamp(1, 100);
+
+    final futureValue = _calculateFutureValue(
+      widget.currentValue,
+      widget.monthlyContribution,
+      widget.annualReturn,
+      widget.contributionGrowth,
+      remainingYears,
+    );
+
+    final isGoalMet = futureValue >= widget.targetAmount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        _GoalProgressGauge(
+          currentValue: widget.currentValue,
+          targetAmount: widget.targetAmount,
+          isDark: isDark,
+        ),
+        const SizedBox(height: 24),
+
+        // Sliders card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '목표 설정',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Target Amount Slider
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('목표 금액', style: TextStyle(fontSize: 13)),
+                  Text(
+                    _formatKoreanAmount(widget.targetAmount),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF176B5B),
+                    ),
+                  ),
+                ],
+              ),
+              Slider(
+                value: widget.targetAmount,
+                min: 10000000.0,
+                max: 5000000000.0,
+                divisions: 499,
+                activeColor: const Color(0xFF176B5B),
+                inactiveColor: isDark ? Colors.grey[850] : Colors.grey[200],
+                onChanged: (val) {
+                  widget.onTargetAmountChanged(val);
+                },
+              ),
+              const SizedBox(height: 12),
+              // Target Years Slider (Absolute Year)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('목표 연도', style: TextStyle(fontSize: 13)),
+                  Text(
+                    '$targetYear년 (남은 기간: $remainingYears년)',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF176B5B),
+                    ),
+                  ),
+                ],
+              ),
+              Slider(
+                value: targetYear.toDouble(),
+                min: (currentYear + 1).toDouble(),
+                max: (currentYear + 50).toDouble(),
+                divisions: 49,
+                activeColor: const Color(0xFF176B5B),
+                inactiveColor: isDark ? Colors.grey[850] : Colors.grey[200],
+                onChanged: (val) {
+                  widget.onTargetYearsChanged(val.toInt());
+                },
+              ),
+              const SizedBox(height: 16),
+              // 현재 시뮬레이션 기본 설정 요약 표시
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildAssumptionItem('연동 월 저축액', _formatKoreanAmount(widget.monthlyContribution), isDark),
+                    _buildAssumptionItem('연동 수익률', '${widget.annualReturn.toStringAsFixed(1)}%', isDark),
+                    _buildAssumptionItem('연동 저축 증액률', '연 ${widget.contributionGrowth.toStringAsFixed(1)}%', isDark),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Forecast status card
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isGoalMet
+                ? (isDark ? const Color(0xFF1B5E20).withValues(alpha: 0.15) : const Color(0xFFE8F5E9))
+                : (isDark ? const Color(0xFFE65100).withValues(alpha: 0.15) : const Color(0xFFFFF3E0)),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isGoalMet ? const Color(0xFF2E7D32) : const Color(0xFFEF6C00),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isGoalMet ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                    color: isGoalMet ? const Color(0xFF2E7D32) : const Color(0xFFEF6C00),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isGoalMet ? '목표 달성 성공 예측' : '목표 달성 미달 예측',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: isGoalMet ? const Color(0xFF2E7D32) : const Color(0xFFEF6C00),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '$targetYear년 ($remainingYears년 후) 예상 은퇴 자산: ${_formatKoreanAmount(futureValue)}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.grey[300] : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isGoalMet
+                    ? '목표 금액 대비 ${_formatKoreanAmount(futureValue - widget.targetAmount)} 초과 달성될 것으로 예상됩니다.'
+                    : '목표 금액 대비 ${_formatKoreanAmount(widget.targetAmount - futureValue)} 부족할 것으로 예상됩니다.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey[400] : Colors.grey[700],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Pacemaker AI Advisor
+        Text(
+          '🎯 페이스메이커 AI 조언',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        if (!isGoalMet) ...[
+          // Missed Goal Advisor Cards
+          Builder(
+            builder: (context) {
+              final reqContrib = _calculateRequiredMonthlyContribution(remainingYears);
+              final diff = reqContrib - widget.monthlyContribution;
+              return _buildAdvisorCard(
+                context,
+                isDark,
+                title: '월 저축액 증액안',
+                icon: Icons.savings_outlined,
+                description: '매월 추가로 ${_formatKoreanAmount(diff)}을 더 납입하여 월 저축액을 ${_formatKoreanAmount(reqContrib)}으로 올려보세요.',
+                buttonText: '적용',
+                onTap: () {
+                  widget.onMonthlyContributionChanged(reqContrib);
+                },
+              );
+            },
+          ),
+          Builder(
+            builder: (context) {
+              final reqYears = _calculateRequiredYears(remainingYears);
+              final diff = reqYears - remainingYears;
+              return _buildAdvisorCard(
+                context,
+                isDark,
+                title: '목표 기간 연장안',
+                icon: Icons.update,
+                description: '은퇴/목표 시점을 $diff년 더 늘려서 목표 연도를 ${currentYear + reqYears}년으로 설정해보세요.',
+                buttonText: '적용',
+                onTap: () {
+                  widget.onTargetYearsChanged(currentYear + reqYears);
+                },
+              );
+            },
+          ),
+          Builder(
+            builder: (context) {
+              final reqReturn = _calculateRequiredReturn(remainingYears);
+              final diff = reqReturn - widget.annualReturn;
+              if (reqReturn > 30.0) {
+                return const SizedBox.shrink(); // Hide unrealistic return advice (>30%)
+              }
+              return _buildAdvisorCard(
+                context,
+                isDark,
+                title: '수익률 향상안',
+                icon: Icons.trending_up,
+                description: '연 목표 수익률을 ${diff.toStringAsFixed(1)}% 더 올려서 ${reqReturn.toStringAsFixed(1)}%로 포트폴리오를 조정해보세요.',
+                buttonText: '적용',
+                onTap: () {
+                  widget.onAnnualReturnChanged(reqReturn);
+                },
+              );
+            },
+          ),
+        ] else ...[
+          // Met Goal Advisor Cards (Optimizations)
+          Builder(
+            builder: (context) {
+              final minContrib = _calculateMinimumMonthlyContribution(remainingYears);
+              final savings = widget.monthlyContribution - minContrib;
+              if (savings < 50000.0) {
+                return const SizedBox.shrink();
+              }
+              return _buildAdvisorCard(
+                context,
+                isDark,
+                title: '지출 및 저축 최적화 (월 저축액 감액)',
+                icon: Icons.savings_outlined,
+                description: '매월 저축액을 ${_formatKoreanAmount(savings)} 아끼고 ${_formatKoreanAmount(minContrib)}만 저축해도 목표를 달성할 수 있습니다.',
+                buttonText: '조정',
+                onTap: () {
+                  widget.onMonthlyContributionChanged(minContrib);
+                },
+              );
+            },
+          ),
+          Builder(
+            builder: (context) {
+              final minYears = _calculateMinimumYears();
+              final diff = widget.targetYears - minYears;
+              if (diff <= 0) {
+                return const SizedBox.shrink();
+              }
+              return _buildAdvisorCard(
+                context,
+                isDark,
+                title: '은퇴 조기 달성안 (기간 단축)',
+                icon: Icons.speed,
+                description: '현재 자산 납입 페이스로는 목표를 $diff년 단축하여 $minYears년 만에 조기 달성할 수 있습니다.',
+                buttonText: '조정',
+                onTap: () {
+                  widget.onTargetYearsChanged(minYears);
+                },
+              );
+            },
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.star_rounded, color: Colors.amber, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '현재 자산 운용 페이스가 매우 훌륭합니다. 현 상태를 잘 유지해 보세요!',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.grey[300] : Colors.grey[850],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildAdvisorCard(
+    BuildContext context,
+    bool isDark, {
+    required String title,
+    required IconData icon,
+    required String description,
+    required String buttonText,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF176B5B).withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: const Color(0xFF176B5B), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.grey[400] : Colors.grey[700],
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: onTap,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF176B5B),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              buttonText,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssumptionItem(String label, String value, bool isDark) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
@@ -1439,8 +2005,7 @@ class SimulationTab extends StatelessWidget {
                             color: Theme.of(context).colorScheme.primary,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.stacked_line_chart,
-                              color: Colors.white),
+                          child: const Icon(Icons.stacked_line_chart, color: Colors.white),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1449,12 +2014,13 @@ class SimulationTab extends StatelessWidget {
                             children: [
                               const Text(
                                 'Wealth Flow',
-                                style: TextStyle(
-                                    fontSize: 24, fontWeight: FontWeight.w800),
+                                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
                               ),
                               Text(
-                                '미래 자산 시뮬레이션',
-                                style: TextStyle(color: isDark ? Colors.grey[400] : const Color(0xFF6E675E)),
+                                _showGoalPlanner ? '은퇴·목표 플래너' : '미래 자산 시뮬레이션',
+                                style: TextStyle(
+                                  color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
+                                ),
                               ),
                             ],
                           ),
@@ -1462,35 +2028,150 @@ class SimulationTab extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 20),
-                    _Header(
-                      currentValue: currentValue,
-                      projectedValue: projectedValue,
-                      years: years,
-                      gain: gain,
-                    ),
+                    _buildTabToggle(isDark),
                     const SizedBox(height: 16),
-                    _ScenarioPanel(
-                      annualReturn: annualReturn,
-                      monthlyContribution: monthlyContribution,
-                      contributionGrowth: contributionGrowth,
-                      years: years,
-                      onAnnualReturnChanged: onAnnualReturnChanged,
-                      onMonthlyContributionChanged:
-                          onMonthlyContributionChanged,
-                      onContributionGrowthChanged: onContributionGrowthChanged,
-                      onYearsChanged: onYearsChanged,
-                    ),
-                    const SizedBox(height: 16),
-                    _ProjectionChart(points: projectionPoints),
-                    const SizedBox(height: 16),
-                    _ProjectionTable(points: projectionPoints),
-                    const SizedBox(height: 28),
+
+                    if (!_showGoalPlanner) ...[
+                      _Header(
+                        currentValue: widget.currentValue,
+                        projectedValue: widget.projectedValue,
+                        years: widget.years,
+                        gain: widget.gain,
+                      ),
+                      const SizedBox(height: 16),
+                      _ScenarioPanel(
+                        annualReturn: widget.annualReturn,
+                        monthlyContribution: widget.monthlyContribution,
+                        contributionGrowth: widget.contributionGrowth,
+                        years: widget.years,
+                        onAnnualReturnChanged: widget.onAnnualReturnChanged,
+                        onMonthlyContributionChanged: widget.onMonthlyContributionChanged,
+                        onContributionGrowthChanged: widget.onContributionGrowthChanged,
+                        onYearsChanged: widget.onYearsChanged,
+                      ),
+                      const SizedBox(height: 16),
+                      _ProjectionChart(points: widget.projectionPoints),
+                      const SizedBox(height: 16),
+                      _ProjectionTable(points: widget.projectionPoints),
+                      const SizedBox(height: 28),
+                    ] else ...[
+                      _buildGoalPlannerView(context, isDark),
+                    ],
                   ],
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _GoalProgressGauge extends StatelessWidget {
+  final double currentValue;
+  final double targetAmount;
+  final bool isDark;
+
+  const _GoalProgressGauge({
+    required this.currentValue,
+    required this.targetAmount,
+    required this.isDark,
+  });
+
+  String _formatKoreanAmount(double amount) {
+    if (amount >= 100000000) {
+      final double eok = amount / 100000000;
+      final int eokInt = eok.floor();
+      final double man = (amount % 100000000) / 10000;
+      if (man > 0) {
+        return '$eokInt억 ${man.round()}만 원';
+      } else {
+        return '$eokInt억 원';
+      }
+    } else {
+      final double man = amount / 10000;
+      return '${man.round()}만 원';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double percent = targetAmount > 0 
+        ? (currentValue / targetAmount * 100).clamp(0.0, 100.0) 
+        : 0.0;
+
+    return Center(
+      child: Column(
+        children: [
+          SizedBox(
+            width: 140,
+            height: 140,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CircularProgressIndicator(
+                    value: 1.0,
+                    strokeWidth: 12,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      isDark ? const Color(0xFF2C2C2C) : Colors.grey[200]!,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0.0, end: percent / 100),
+                    duration: const Duration(milliseconds: 1000),
+                    curve: Curves.easeOut,
+                    builder: (context, value, child) {
+                      return CircularProgressIndicator(
+                        value: value,
+                        strokeWidth: 12,
+                        strokeCap: StrokeCap.round,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF176B5B),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '현재 자산 대비',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${percent.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '현재 자산 ${_formatKoreanAmount(currentValue)} / 목표 ${_formatKoreanAmount(targetAmount)}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+        ],
       ),
     );
   }

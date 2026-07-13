@@ -53,11 +53,6 @@ android {
         }
     }
 
-    packaging {
-        jniLibs {
-            doNotStrip.add("**/*.so")
-        }
-    }
 }
 
 kotlin {

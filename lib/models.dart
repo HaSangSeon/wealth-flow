@@ -199,12 +199,16 @@ class SimulationSettings {
   double monthlyContribution;
   double contributionGrowth;
   int years;
+  double targetAmount;
+  int targetYears;
 
   SimulationSettings({
     this.annualReturn = 7,
     this.monthlyContribution = 1000000,
     this.contributionGrowth = 3,
     this.years = 15,
+    this.targetAmount = 1000000000.0,
+    this.targetYears = 15,
   });
 
   Map<String, dynamic> toJson() => {
@@ -212,14 +216,18 @@ class SimulationSettings {
         'monthlyContribution': monthlyContribution,
         'contributionGrowth': contributionGrowth,
         'years': years,
+        'targetAmount': targetAmount,
+        'targetYears': targetYears,
       };
 
   factory SimulationSettings.fromJson(Map<String, dynamic> json) =>
       SimulationSettings(
-        annualReturn: (json['annualReturn'] as num).toDouble(),
-        monthlyContribution: (json['monthlyContribution'] as num).toDouble(),
-        contributionGrowth: (json['contributionGrowth'] as num).toDouble(),
-        years: json['years'] as int,
+        annualReturn: (json['annualReturn'] as num?)?.toDouble() ?? 7.0,
+        monthlyContribution: (json['monthlyContribution'] as num?)?.toDouble() ?? 1000000.0,
+        contributionGrowth: (json['contributionGrowth'] as num?)?.toDouble() ?? 3.0,
+        years: json['years'] as int? ?? 15,
+        targetAmount: (json['targetAmount'] as num?)?.toDouble() ?? 1000000000.0,
+        targetYears: json['targetYears'] as int? ?? 15,
       );
 }
 
