@@ -75,33 +75,12 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Developer Easter Egg: Long press to toggle premium status
-                    GestureDetector(
-                      onLongPress: const bool.fromEnvironment('DEV_MODE', defaultValue: false)
-                          ? () {
-                              setState(() {
-                                widget.storage.isPremium = !widget.storage.isPremium;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    widget.storage.isPremium
-                                        ? '👑 개발자 모드: 프리미엄 활성화'
-                                        : '개발자 모드: 무료 버전 활성화',
-                                  ),
-                                  backgroundColor: const Color(0xFF176B5B),
-                                ),
-                              );
-                              Navigator.pop(context, true);
-                            }
-                          : null,
-                      child: const Text(
-                        '👑 Wealth Flow\nPremium',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          height: 1.2,
-                        ),
+                    const Text(
+                      '👑 Wealth Flow\nPremium',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        height: 1.2,
                       ),
                     ),
                     const SizedBox(height: 12),
