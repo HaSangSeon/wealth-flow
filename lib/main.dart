@@ -1549,6 +1549,73 @@ class _SimulationTabState extends State<SimulationTab> {
             child: FractionallySizedBox(
               widthFactor: 0.5,
               child: Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _showGoalPlanner = false;
+                    });
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Text(
+                      '자산 예측',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: !_showGoalPlanner ? FontWeight.bold : FontWeight.normal,
+                        color: !_showGoalPlanner
+                            ? (isDark ? Colors.white : Colors.black87)
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _showGoalPlanner = true;
+                    });
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Text(
+                      '은퇴·목표 플래너',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: _showGoalPlanner ? FontWeight.bold : FontWeight.normal,
+                        color: _showGoalPlanner
+                            ? (isDark ? Colors.white : Colors.black87)
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGoalPlannerView(BuildContext context, bool isDark) {
     final int currentYear = DateTime.now().year;
     final int targetYear = widget.targetYears <= 100 ? currentYear + widget.targetYears : widget.targetYears;
@@ -1826,8 +1893,8 @@ class _SimulationTabState extends State<SimulationTab> {
           ),
           Builder(
             builder: (context) {
-              final minYears = _calculateMinimumYears();
-              final diff = widget.targetYears - minYears;
+              final minYears = _calculateMinimumYears(remainingYears);
+              final diff = remainingYears - minYears;
               if (diff <= 0) {
                 return const SizedBox.shrink();
               }
@@ -1836,10 +1903,10 @@ class _SimulationTabState extends State<SimulationTab> {
                 isDark,
                 title: '은퇴 조기 달성안 (기간 단축)',
                 icon: Icons.speed,
-                description: '현재 자산 납입 페이스로는 목표를 $diff년 단축하여 $minYears년 만에 조기 달성할 수 있습니다.',
+                description: '현재 자산 납입 페이스로는 목표를 $diff년 단축하여 ${currentYear + minYears}년에 조기 달성할 수 있습니다.',
                 buttonText: '조정',
                 onTap: () {
-                  widget.onTargetYearsChanged(minYears);
+                  widget.onTargetYearsChanged(currentYear + minYears);
                 },
               );
             },
