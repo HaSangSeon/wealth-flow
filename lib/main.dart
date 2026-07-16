@@ -3,10 +3,12 @@ import 'dart:ui' as ui;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-
+import 'package:home_widget/home_widget.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'formatters.dart';
 import 'dividend.dart';
 import 'models.dart';
@@ -17,9 +19,12 @@ import 'yahoo_finance_service.dart';
 // ─── 앱 진ㄴㄴ입점 ────────────────────────────────────────────
 
 late final ValueNotifier<ThemeMode> themeNotifier;
+final GlobalKey<PortfolioNewsCarouselState> portfolioNewsKey = GlobalKey<PortfolioNewsCarouselState>();
+final GlobalKey<RefreshIndicatorState> refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  HomeWidget.setAppGroupId('group.com.hadoseo.wealthflow');
   await Hive.initFlutter();
   final storage = StorageService();
   await storage.init();
@@ -340,7 +345,7 @@ class MainNavigationScreen extends StatefulWidget {
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
+class _MainNavigationScreenState extends State<MainNavigationScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   late List<Holding> _holdings;
   late SimulationSettings _settings;
@@ -349,11 +354,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _holdings = widget.storage.loadHoldings();
     _settings = widget.storage.loadSettings();
+    _updateWidget();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndSyncPrices();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAndSyncPrices();
+    }
   }
 
   void _loadDataForProfile() {
@@ -361,6 +381,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _holdings = widget.storage.loadHoldings();
       _settings = widget.storage.loadSettings();
     });
+    _updateWidget();
     _checkAndSyncPrices();
   }
 
@@ -413,7 +434,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Future<void> _checkAndSyncPrices() async {
     final lastSyncedAt = widget.storage.lastSyncedAt;
     if (lastSyncedAt == null || DateTime.now().difference(lastSyncedAt).inMinutes >= 5) {
-      await _syncPrices();
+      if (refreshIndicatorKey.currentState != null) {
+        refreshIndicatorKey.currentState?.show();
+      } else {
+        await _syncPrices();
+      }
     }
   }
 
@@ -479,11 +504,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     if (mounted) {
       setState(() => _isSyncing = false);
     }
+    portfolioNewsKey.currentState?.fetchNews();
   }
 
   void _saveAll() {
     widget.storage.saveHoldings(_holdings);
     widget.storage.saveSettings(_settings);
+    _updateWidget();
+  }
+
+  void _updateWidget() {
+    final formattedTotal = formatCurrencyFull(_currentValue);
+    double target = _settings.targetAmount;
+    double percent = target > 0 ? (_currentValue / target * 100).clamp(0.0, 100.0) : 0.0;
+    String percentStr = "은퇴 달성률 " + percent.toStringAsFixed(1) + "%";
+    
+    HomeWidget.saveWidgetData<String>('total_wealth', formattedTotal);
+    HomeWidget.saveWidgetData<String>('progress_percent', percentStr);
+    HomeWidget.updateWidget(
+      androidName: 'WealthWidgetProvider',
+      iOSName: 'WealthWidget',
+    );
   }
 
   double get _currentValue =>
@@ -736,7 +777,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         setState(() => _holdings[existingIndex] = updated);
         message = "'${holding.name}' 자산이 기존 수량에 합산되었습니다.";
       } else {
-        setState(() => _holdings.add(holding));
+        setState(() => _holdings = List.from(_holdings)..add(holding));
         message = "'${holding.name}' 자산이 추가되었습니다.";
       }
 
@@ -768,7 +809,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
 
     if (holding != null && mounted) {
-      setState(() => _holdings[index] = holding);
+      setState(() => _holdings = List.from(_holdings)..[index] = holding);
       _saveAll();
       _syncPrices();
       if (mounted) {
@@ -798,7 +839,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              setState(() => _holdings.remove(holding));
+              setState(() => _holdings = List.from(_holdings)..remove(holding));
               _saveAll();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -866,6 +907,7 @@ class AssetManagementTab extends StatelessWidget {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: RefreshIndicator(
+          key: refreshIndicatorKey,
           onRefresh: onRefresh,
           color: const Color(0xFF176B5B),
           child: CustomScrollView(
@@ -1110,6 +1152,7 @@ class AssetManagementTab extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    PortfolioNewsCarousel(key: portfolioNewsKey, holdings: holdings),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -4870,6 +4913,219 @@ class _AddProfileDialogState extends State<AddProfileDialog> {
           onPressed: _addProfile,
           child: const Text('추가'),
         ),
+      ],
+    );
+  }
+}
+
+class PortfolioNewsCarousel extends StatefulWidget {
+  final List<Holding> holdings;
+
+  const PortfolioNewsCarousel({super.key, required this.holdings});
+
+  @override
+  State<PortfolioNewsCarousel> createState() => PortfolioNewsCarouselState();
+}
+
+class PortfolioNewsCarouselState extends State<PortfolioNewsCarousel> {
+  List<Map<String, dynamic>> _newsItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchNews();
+  }
+
+  @override
+  void didUpdateWidget(PortfolioNewsCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldSymbols = oldWidget.holdings.map((h) => h.symbol ?? '').where((s) => s.isNotEmpty).toSet();
+    final newSymbols = widget.holdings.map((h) => h.symbol ?? '').where((s) => s.isNotEmpty).toSet();
+    if (oldSymbols.length != newSymbols.length || !oldSymbols.containsAll(newSymbols)) {
+      fetchNews();
+    }
+  }
+
+  Future<void> fetchNews() async {
+    setState(() => _isLoading = true);
+    final holdingMap = {for (var h in widget.holdings) if (h.name.isNotEmpty) h.name: h.symbol ?? ''};
+    final names = widget.holdings.map((h) => h.name).where((n) => n.isNotEmpty && n != '현금').toSet().toList();
+    if (names.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _newsItems = [];
+        });
+      }
+      return;
+    }
+
+    final service = YahooFinanceService();
+    final news = await service.fetchPortfolioNews(names);
+    
+    List<Map<String, dynamic>> finalNews = [];
+    for (var item in news) {
+      item['holdingName'] = item['query'];
+      item['symbol'] = holdingMap[item['query']] ?? '';
+      finalNews.add(item);
+    }
+    
+    if (mounted) {
+      setState(() {
+        _newsItems = finalNews;
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _formatTime(int epochSeconds) {
+    final diff = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(epochSeconds * 1000));
+    if (diff.inDays > 0) return '${diff.inDays}일 전';
+    if (diff.inHours > 0) return '${diff.inHours}시간 전';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}분 전';
+    return '방금 전';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isLoading && _newsItems.isEmpty) return const SizedBox.shrink();
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Row(
+            children: [
+              const Text('🔥 ', style: TextStyle(fontSize: 16)),
+              Text(
+                '오늘의 종목 브리핑',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              const Spacer(),
+              if (_isLoading)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 130,
+          child: _isLoading 
+            ? ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: 3,
+                itemBuilder: (context, index) {
+                  return Container(
+                    width: 260,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
+                    ),
+                  );
+                },
+              )
+            : ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _newsItems.length,
+                itemBuilder: (context, index) {
+                  final news = _newsItems[index];
+                  return GestureDetector(
+                    onTap: () async {
+                      final url = Uri.parse(news['link']);
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url);
+                      }
+                    },
+                    child: Container(
+                      width: 260,
+                      margin: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF176B5B).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  news['symbol'].isNotEmpty ? '${news['holdingName']} (${news['symbol']})' : news['holdingName'],
+                                  style: const TextStyle(
+                                    color: Color(0xFF176B5B),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                _formatTime(news['providerPublishTime']),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isDark ? Colors.grey[500] : Colors.grey[400],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Expanded(
+                            child: Text(
+                              news['title'],
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                height: 1.4,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            news['publisher'],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+        ),
+        const SizedBox(height: 20),
       ],
     );
   }

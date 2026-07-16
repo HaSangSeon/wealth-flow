@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
+import 'package:xml/xml.dart' as xml;
 
 class YahooFinanceSearchResult {
   final String symbol;
@@ -44,6 +46,69 @@ class YahooFinanceService {
     } catch (e) {
       _localKoreanStocks = [];
     }
+  }
+
+  String _buildRelevanceQuery(String query) {
+    final hasKorean = RegExp(r'[\uac00-\ud7a3]').hasMatch(query);
+    if (hasKorean) {
+      return '$query (주가 OR 실적 OR 전망 OR 공시 OR 특허 OR 인수 OR 소송 OR 사업 OR 시장 OR 투자 OR 분석)';
+    } else {
+      return '$query (stock OR earnings OR outlook OR "share price" OR "target price" OR acquisition OR lawsuit OR business OR market OR investment OR analysis)';
+    }
+  }
+
+  /// 사용자가 보유한 종목들의 최신 뉴스를 가져옵니다 (Google News RSS).
+  Future<List<Map<String, dynamic>>> fetchPortfolioNews(List<String> queries) async {
+    final List<Map<String, dynamic>> allNews = [];
+    final Set<String> seenUrls = {};
+
+    // 최대 5개 종목까지만 뉴스를 가져옵니다
+    final targetQueries = queries.take(5).toList();
+
+    for (final query in targetQueries) {
+      try {
+        final refinedQuery = _buildRelevanceQuery(query);
+        final encodedQuery = Uri.encodeComponent(refinedQuery);
+        final url = Uri.parse('https://news.google.com/rss/search?q=$encodedQuery&hl=ko&gl=KR&ceid=KR:ko');
+        final response = await http.get(url, headers: {'User-Agent': _userAgent});
+
+        if (response.statusCode == 200) {
+          final document = xml.XmlDocument.parse(response.body);
+          final items = document.findAllElements('item').take(2);
+          
+          for (final item in items) {
+            final title = item.findElements('title').firstOrNull?.innerText ?? '';
+            final link = item.findElements('link').firstOrNull?.innerText ?? '';
+            final pubDateStr = item.findElements('pubDate').firstOrNull?.innerText ?? '';
+            final source = item.findElements('source').firstOrNull?.innerText ?? 'Google News';
+            
+            if (link.isEmpty || seenUrls.contains(link)) continue;
+            
+            seenUrls.add(link);
+
+            int timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+            try {
+               timestamp = HttpDate.parse(pubDateStr).millisecondsSinceEpoch ~/ 1000;
+            } catch (_) {}
+
+            allNews.add({
+              'query': query,
+              'title': title,
+              'publisher': source,
+              'link': link,
+              'providerPublishTime': timestamp,
+            });
+          }
+        }
+      } catch (e) {
+        // Ignore individual failures
+      }
+    }
+
+    // 최신 순 정렬
+    allNews.sort((a, b) => (b['providerPublishTime'] as int).compareTo(a['providerPublishTime'] as int));
+
+    return allNews;
   }
 
   bool _isChoseongOnly(String text) {
