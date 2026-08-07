@@ -200,13 +200,13 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
                       ),
                     ),
                     const SizedBox(height: 36),
-                    // Pricing Card
+                    // Free Access Banner Card
                     Container(
                       decoration: BoxDecoration(
                         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: const Color(0xFF176B5B).withValues(alpha: 0.3),
+                          color: const Color(0xFF176B5B).withValues(alpha: 0.5),
                           width: 2,
                         ),
                         boxShadow: [
@@ -220,36 +220,27 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                '평생 소장권 (추천)',
+                                '🎉 100% 전면 무료 혜택 적용 중',
                                 style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                              const Text(
-                                '₩4,900 / 일시불',
-                                style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.w900,
                                   color: Color(0xFF176B5B),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '초기 버전 특별 할인가! 한 번 결제하고 추가 비용 없이 평생 무제한 사용',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 13,
-                              ),
+                          const SizedBox(height: 10),
+                          Text(
+                            '현재 모든 유료 기능(무제한 자산/프로필 등록, 배당 캘린더 분석 등)이 별도 결제 없이 100% 무료로 해제되어 있습니다.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isDark ? Colors.white70 : Colors.black87,
+                              fontSize: 13,
+                              height: 1.5,
                             ),
                           ),
                         ],
@@ -260,56 +251,21 @@ class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
                       width: double.infinity,
                       height: 60,
                       child: FilledButton(
-                        onPressed: widget.storage.isPremium || _isLoading
-                            ? null
-                            : () async {
-                                setState(() {
-                                  _isLoading = true;
-                                });
-                                final success = await PaymentService.purchasePremium();
-                                setState(() {
-                                  _isLoading = false;
-                                });
-                                if (!context.mounted) return;
-                                if (success) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('👑 프리미엄 결제가 완료되었습니다!'),
-                                      backgroundColor: Color(0xFF176B5B),
-                                    ),
-                                  );
-                                  Navigator.pop(context, true);
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('결제에 실패했거나 취소되었습니다.'),
-                                      backgroundColor: Colors.redAccent,
-                                    ),
-                                  );
-                                }
-                              },
+                        onPressed: () => Navigator.pop(context, true),
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFF176B5B),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                widget.storage.isPremium ? '이미 프리미엄 멤버입니다' : '프리미엄 업그레이드',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                        child: const Text(
+                          '무료로 전체 기능 이용하기',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

@@ -16,7 +16,13 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
-    project.evaluationDependsOn(":app")
+    if (project.name != "app") {
+        try {
+            project.evaluationDependsOn(":app")
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
 }
 
 subprojects {

@@ -8,29 +8,29 @@ class PaymentService {
   static const String _googleApiKey = "goog_YugkYTfxkNyGuqsUUXHScHDTANb"; 
   static const String _iosApiKey = "appl_placeholder"; 
 
-  static final ValueNotifier<bool> isPremiumNotifier = ValueNotifier<bool>(false);
+  static final ValueNotifier<bool> isPremiumNotifier = ValueNotifier<bool>(true);
 
   static Future<void> initialize(StorageService storage) async {
-    await Purchases.setLogLevel(LogLevel.debug);
+    // Make all premium features 100% free for all users
+    storage.isPremium = true;
+    isPremiumNotifier.value = true;
 
-    PurchasesConfiguration? configuration;
-    if (Platform.isAndroid) {
-      configuration = PurchasesConfiguration(_googleApiKey);
-    } else if (Platform.isIOS) {
-      configuration = PurchasesConfiguration(_iosApiKey);
+    try {
+      await Purchases.setLogLevel(LogLevel.debug);
+
+      PurchasesConfiguration? configuration;
+      if (Platform.isAndroid) {
+        configuration = PurchasesConfiguration(_googleApiKey);
+      } else if (Platform.isIOS) {
+        configuration = PurchasesConfiguration(_iosApiKey);
+      }
+
+      if (configuration != null) {
+        await Purchases.configure(configuration);
+      }
+    } catch (e) {
+      debugPrint("Failed to initialize RevenueCat: $e");
     }
-
-    if (configuration != null) {
-      await Purchases.configure(configuration);
-    }
-
-    // Check current entitlement status and sync
-    await updatePremiumStatus(storage);
-
-    // Listen to customer info changes (such as purchase completed, refunded, expired)
-    Purchases.addCustomerInfoUpdateListener((customerInfo) {
-      _syncPremiumStatus(customerInfo, storage);
-    });
   }
 
   static Future<void> updatePremiumStatus(StorageService storage) async {

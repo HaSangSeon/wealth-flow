@@ -15,6 +15,7 @@ import 'models.dart';
 import 'payment_service.dart';
 import 'premium.dart';
 import 'yahoo_finance_service.dart';
+import 'ad_service.dart';
 
 // ─── 앱 진ㄴㄴ입점 ────────────────────────────────────────────
 
@@ -31,8 +32,9 @@ Future<void> main() async {
   
   try {
     await PaymentService.initialize(storage);
+    await AdService.initialize();
   } catch (e) {
-    debugPrint("Failed to initialize PaymentService: $e");
+    debugPrint("Failed to initialize PaymentService or AdService: $e");
   }
   
   themeNotifier = ValueNotifier<ThemeMode>(
@@ -403,15 +405,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             Navigator.pop(context);
             _switchProfile(profileId);
           },
-          onProfileAdded: () async {
+          onProfileAdded: () {
             Navigator.pop(context);
-            if (!widget.storage.isPremium && widget.storage.profiles.length >= 2) {
-              await _showPremiumLimitDialog(
-                '무료 버전에서는 최대 2개의 프로필까지만 생성할 수 있습니다.\n\n프리미엄 멤버십으로 업그레이드하여 한계 없는 무제한 프로필 추가를 경험해 보세요!',
-              );
-            } else {
-              _openAddProfileDialog();
-            }
+            _openAddProfileDialog();
           },
           onProfileEdited: () {
             setState(() {});
@@ -649,33 +645,39 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        selectedItemColor: Theme.of(context).colorScheme.primary,
-        unselectedItemColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey : const Color(0xFF8C847A),
-        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.white,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            activeIcon: Icon(Icons.account_balance_wallet),
-            label: '내 자산',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.savings_outlined),
-            activeIcon: Icon(Icons.savings),
-            label: '연금/절세',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.analytics_outlined),
-            activeIcon: Icon(Icons.analytics),
-            label: '시뮬레이션',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month_outlined),
-            activeIcon: Icon(Icons.calendar_month),
-            label: '배당',
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AdBannerWidget(),
+          BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) => setState(() => _currentIndex = index),
+            selectedItemColor: Theme.of(context).colorScheme.primary,
+            unselectedItemColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey : const Color(0xFF8C847A),
+            backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.white,
+            type: BottomNavigationBarType.fixed,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.account_balance_wallet_outlined),
+                activeIcon: Icon(Icons.account_balance_wallet),
+                label: '내 자산',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.savings_outlined),
+                activeIcon: Icon(Icons.savings),
+                label: '연금/절세',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.analytics_outlined),
+                activeIcon: Icon(Icons.analytics),
+                label: '시뮬레이션',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.calendar_month_outlined),
+                activeIcon: Icon(Icons.calendar_month),
+                label: '배당',
+              ),
+            ],
           ),
         ],
       ),
@@ -740,13 +742,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
   }
 
   Future<void> _openAddHoldingSheet() async {
-    // 프리미엄 회원이 아닌 경우, 자산 등록 개수를 총합 최대 5개로 제한
-    if (!widget.storage.isPremium && widget.storage.getTotalHoldingsCount() >= 5) {
-      await _showPremiumLimitDialog(
-        '무료 버전에서는 모든 프로필을 합쳐 총 5개의 자산까지만 등록할 수 있습니다.\n\n프리미엄 멤버십으로 업그레이드하여 한계 없는 무제한 자산 추가를 경험해 보세요!',
-      );
-      return;
-    }
 
     final holding = await showModalBottomSheet<Holding>(
       context: context,
@@ -975,43 +970,6 @@ class AssetManagementTab extends StatelessWidget {
                                   style: TextStyle(color: Colors.grey, fontSize: 11),
                                 ),
                               ],
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => PremiumSubscriptionScreen(storage: storage),
-                              ),
-                            ).then((_) {
-                              onPremiumChanged();
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: storage.isPremium
-                                    ? [const Color(0xFF176B5B), const Color(0xFF084C3D)]
-                                    : [const Color(0xFFEAA622), const Color(0xFFD48B00)],
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: storage.isPremium
-                                    ? const Color(0xFFEAA622)
-                                    : Colors.transparent,
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              storage.isPremium ? '👑 프리미엄 회원' : '👑 프리미엄',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
                             ),
                           ),
                         ),
@@ -5045,8 +5003,14 @@ class PortfolioNewsCarouselState extends State<PortfolioNewsCarousel> {
                   return GestureDetector(
                     onTap: () async {
                       final url = Uri.parse(news['link']);
-                      if (await canLaunchUrl(url)) {
-                        await launchUrl(url);
+                      try {
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        } else {
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        }
+                      } catch (e) {
+                        debugPrint('Error launching url: $e');
                       }
                     },
                     child: Container(
@@ -5068,23 +5032,29 @@ class PortfolioNewsCarouselState extends State<PortfolioNewsCarousel> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF176B5B).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  news['symbol'].isNotEmpty ? '${news['holdingName']} (${news['symbol']})' : news['holdingName'],
-                                  style: const TextStyle(
-                                    color: Color(0xFF176B5B),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF176B5B).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    news['symbol'].isNotEmpty ? '${news['holdingName']} (${news['symbol']})' : news['holdingName'],
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    softWrap: false,
+                                    style: const TextStyle(
+                                      color: Color(0xFF176B5B),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
-                              const Spacer(),
+                              const SizedBox(width: 6),
                               Text(
                                 _formatTime(news['providerPublishTime']),
                                 style: TextStyle(

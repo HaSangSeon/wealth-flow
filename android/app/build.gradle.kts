@@ -48,14 +48,8 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
             ndk {
-                debugSymbolLevel = "none"
+                debugSymbolLevel = "SYMBOL_TABLE"
             }
-        }
-    }
-
-    packaging {
-        jniLibs {
-            doNotStrip.add("**/*.so")
         }
     }
 
