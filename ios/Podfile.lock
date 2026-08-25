@@ -1,5 +1,7 @@
 PODS:
   - Flutter (1.0.0)
+  - flutter_local_notifications (0.0.1):
+    - Flutter
   - Google-Mobile-Ads-SDK (11.10.0):
     - GoogleUserMessagingPlatform (>= 1.1)
   - google_mobile_ads (5.2.0):
@@ -22,15 +24,19 @@ PODS:
   - webview_flutter_wkwebview (0.0.1):
     - Flutter
     - FlutterMacOS
+  - workmanager_apple (0.0.1):
+    - Flutter
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
+  - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
   - google_mobile_ads (from `.symlinks/plugins/google_mobile_ads/ios`)
   - home_widget (from `.symlinks/plugins/home_widget/ios`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - purchases_flutter (from `.symlinks/plugins/purchases_flutter/ios`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
   - webview_flutter_wkwebview (from `.symlinks/plugins/webview_flutter_wkwebview/darwin`)
+  - workmanager_apple (from `.symlinks/plugins/workmanager_apple/ios`)
 
 SPEC REPOS:
   trunk:
@@ -42,6 +48,8 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
+  flutter_local_notifications:
+    :path: ".symlinks/plugins/flutter_local_notifications/ios"
   google_mobile_ads:
     :path: ".symlinks/plugins/google_mobile_ads/ios"
   home_widget:
@@ -54,9 +62,12 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/url_launcher_ios/ios"
   webview_flutter_wkwebview:
     :path: ".symlinks/plugins/webview_flutter_wkwebview/darwin"
+  workmanager_apple:
+    :path: ".symlinks/plugins/workmanager_apple/ios"
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_local_notifications: 395056b3175ba4f08480a7c5de30cd36d69827e4
   Google-Mobile-Ads-SDK: 13e6e98edfd78ad8d8a791edb927658cc260a56f
   google_mobile_ads: dc2b2a5884bef7ab2b4ff30022a513df5373e208
   GoogleUserMessagingPlatform: befe603da6501006420c206222acd449bba45a9c
@@ -67,6 +78,7 @@ SPEC CHECKSUMS:
   RevenueCat: f3641992451c1426da8d8d1466cec3bbdb765962
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
   webview_flutter_wkwebview: 8ebf4fded22593026f7dbff1fbff31ea98573c8d
+  workmanager_apple: 1fc2a64e6a63ed3540fbb91b65f0c0d501881248
 
 PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
 

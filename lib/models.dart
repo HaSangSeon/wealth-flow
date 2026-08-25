@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -407,4 +406,17 @@ class StorageService {
   double get lastExchangeRate => _box.get(_exchangeRateKey, defaultValue: 1350.0) as double;
 
   set lastExchangeRate(double value) => _box.put(_exchangeRateKey, value);
+
+  static const _stockAlertEnabledKey = 'stock_alert_enabled';
+  static const _stockAlertThresholdKey = 'stock_alert_threshold';
+
+  /// 보유 종목 급등/급락 알림 활성화 여부
+  bool get stockAlertEnabled => _box.get(_stockAlertEnabledKey, defaultValue: true) as bool;
+
+  set stockAlertEnabled(bool value) => _box.put(_stockAlertEnabledKey, value);
+
+  /// 급등/급락 기준 퍼센트 (기본 5%)
+  double get stockAlertThreshold => (_box.get(_stockAlertThresholdKey, defaultValue: 5.0) as num).toDouble();
+
+  set stockAlertThreshold(double value) => _box.put(_stockAlertThresholdKey, value);
 }
