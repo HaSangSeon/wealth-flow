@@ -1,7 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'models.dart';
+import 'formatters.dart';
 import 'premium.dart';
+import 'common_widgets.dart';
 import 'main.dart';
 
 class DividendTab extends StatefulWidget {
