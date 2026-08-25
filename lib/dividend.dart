@@ -345,7 +345,7 @@ class _DividendTabState extends State<DividendTab> {
                                         value: annualTotal > 0 
                                             ? '₩${_formatNumber(annualTotal.round())}' 
                                             : '₩0',
-                                        color: const Color(0xFF176B5B),
+                                        color: isDark ? const Color(0xFF13584B) : const Color(0xFF176B5B),
                                       ),
                                     ),
                                     const SizedBox(width: 10),
@@ -356,7 +356,7 @@ class _DividendTabState extends State<DividendTab> {
                                         value: monthlyAverage > 0 
                                             ? '₩${_formatNumber(monthlyAverage.round())}' 
                                             : '₩0',
-                                        color: const Color(0xFFEAA622),
+                                        color: isDark ? const Color(0xFF945200) : const Color(0xFFAD5E00),
                                       ),
                                     ),
                                   ],
@@ -366,7 +366,7 @@ class _DividendTabState extends State<DividendTab> {
                                   context,
                                   title: '포트폴리오 예상 배당수익률',
                                   value: '${dividendYield.toStringAsFixed(2)}%',
-                                  color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF7F5F0),
+                                  color: isDark ? const Color(0xFF262626) : const Color(0xFFF7F5F0),
                                   isFullWidth: true,
                                 ),
                               ],
@@ -895,7 +895,7 @@ class _DividendTabState extends State<DividendTab> {
     bool isFullWidth = false,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isSpecialColor = color != Colors.white && color != const Color(0xFF2C2C2C);
+    final isDarkBg = color.computeLuminance() < 0.35;
     
     return Container(
       width: double.infinity,
@@ -903,12 +903,18 @@ class _DividendTabState extends State<DividendTab> {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(16),
+        border: !isDarkBg
+            ? Border.all(
+                color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
+                width: 0.8,
+              )
+            : null,
         boxShadow: [
-          if (!isSpecialColor)
+          if (!isDarkBg)
             BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 1),
             ),
         ],
       ),
@@ -920,9 +926,9 @@ class _DividendTabState extends State<DividendTab> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: isSpecialColor 
-                  ? Colors.white.withValues(alpha: 0.7) 
-                  : (isDark ? Colors.white70 : Colors.black54),
+              color: isDarkBg 
+                  ? Colors.white.withValues(alpha: 0.8) 
+                  : (isDark ? Colors.grey[400] : const Color(0xFF6E675E)),
             ),
           ),
           const SizedBox(height: 8),
@@ -933,9 +939,9 @@ class _DividendTabState extends State<DividendTab> {
               style: TextStyle(
                 fontSize: isFullWidth ? 22 : 18,
                 fontWeight: FontWeight.w900,
-                color: isSpecialColor 
+                color: isDarkBg 
                     ? Colors.white 
-                    : (isDark ? Colors.white : Colors.black87),
+                    : (isDark ? Colors.white : const Color(0xFF1A1A1A)),
               ),
             ),
           ),
