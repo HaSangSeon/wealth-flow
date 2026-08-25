@@ -1,0 +1,415 @@
+import 'package:flutter/material.dart';
+import 'dividend_models.dart';
+
+class DividendSummaryHeader extends StatelessWidget {
+  const DividendSummaryHeader({
+    super.key,
+    required this.annualTotal,
+    required this.monthlyAverage,
+    required this.dividendYield,
+    required this.applyTax,
+    required this.onApplyTaxChanged,
+  });
+
+  final double annualTotal;
+  final double monthlyAverage;
+  final double dividendYield;
+  final bool applyTax;
+  final ValueChanged<bool> onApplyTaxChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE5E0D7),
+          width: 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(
+                      Icons.monetization_on_outlined,
+                      size: 16,
+                      color: primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '내 배당 요약',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Text(
+                    '세후(15.4%) 적용',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  SizedBox(
+                    height: 26,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Switch(
+                        value: applyTax,
+                        onChanged: onApplyTaxChanged,
+                        activeThumbColor: primaryColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetricTile(
+                  context,
+                  title: '연간 예상 배당금',
+                  value: annualTotal > 0 
+                      ? '₩${formatDividendNumber(annualTotal.round())}' 
+                      : '₩0',
+                  color: isDark ? const Color(0xFF13584B) : const Color(0xFF176B5B),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMetricTile(
+                  context,
+                  title: '월평균 배당금',
+                  value: monthlyAverage > 0 
+                      ? '₩${formatDividendNumber(monthlyAverage.round())}' 
+                      : '₩0',
+                  color: isDark ? const Color(0xFF945200) : const Color(0xFFAD5E00),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildMetricTile(
+            context,
+            title: '포트폴리오 예상 배당수익률',
+            value: '${dividendYield.toStringAsFixed(2)}%',
+            color: isDark ? const Color(0xFF262626) : const Color(0xFFF7F5F0),
+            isFullWidth: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricTile(
+    BuildContext context, {
+    required String title,
+    required String value,
+    required Color color,
+    bool isFullWidth = false,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDarkBg = color.computeLuminance() < 0.35;
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+        border: !isDarkBg
+            ? Border.all(
+                color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
+                width: 0.8,
+              )
+            : null,
+        boxShadow: [
+          if (!isDarkBg)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 1),
+            ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isDarkBg 
+                  ? Colors.white.withValues(alpha: 0.8) 
+                  : (isDark ? Colors.grey[400] : const Color(0xFF6E675E)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: isFullWidth ? 22 : 18,
+                fontWeight: FontWeight.w900,
+                color: isDarkBg 
+                    ? Colors.white 
+                    : (isDark ? Colors.white : const Color(0xFF1A1A1A)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class DividendFlowBarChart extends StatelessWidget {
+  const DividendFlowBarChart({
+    super.key,
+    required this.monthlyDividends,
+    required this.selectedMonth,
+    required this.onMonthSelected,
+  });
+
+  final Map<int, double> monthlyDividends;
+  final int? selectedMonth;
+  final ValueChanged<int?> onMonthSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE5E0D7),
+          width: 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(
+                      Icons.bar_chart_rounded,
+                      size: 16,
+                      color: primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    selectedMonth == null ? '월별 예상 배당금 흐름' : '$selectedMonth월 배당금 흐름',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          title: Row(
+                            children: [
+                              Icon(Icons.info_outline, color: primaryColor),
+                              const SizedBox(width: 8),
+                              const Flexible(
+                                child: Text(
+                                  '예상 배당금 산출 방식',
+                                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                                ),
+                              ),
+                            ],
+                          ),
+                          content: Text(
+                            '종목별로 가장 최근에 지급된 배당금을 기준으로, 각 배당 주기(월/분기/반기/연)에 맞춰 미래 1년 치 예상 배당액을 산출합니다.',
+                            style: TextStyle(
+                              height: 1.5,
+                              fontSize: 14,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('확인', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    child: Icon(
+                      Icons.help_outline,
+                      size: 16,
+                      color: isDark ? Colors.grey[400] : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+              Visibility(
+                visible: selectedMonth != null,
+                maintainSize: true,
+                maintainAnimation: true,
+                maintainState: true,
+                child: InkWell(
+                  onTap: () => onMonthSelected(null),
+                  borderRadius: BorderRadius.circular(6),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text(
+                      '전체보기',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF176B5B),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 160,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                double maxVal = monthlyDividends.values.fold(0.0, (max, val) => val > max ? val : max);
+                if (maxVal == 0.0) maxVal = 1.0;
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: List.generate(12, (index) {
+                    final month = index + 1;
+                    final monthName = '$month월';
+                    final val = monthlyDividends[month] ?? 0.0;
+                    final double heightFactor = val / maxVal;
+                    final isSelected = selectedMonth == month;
+
+                    return GestureDetector(
+                      onTap: () {
+                        if (val > 0) {
+                          onMonthSelected(isSelected ? null : month);
+                        }
+                      },
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (val > 0)
+                            Text(
+                              val >= 10000 
+                                  ? '${(val / 10000).toStringAsFixed(1)}만' 
+                                  : formatDividendNumber(val.round()),
+                              style: TextStyle(
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? const Color(0xFFEAA622) : Colors.grey,
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Expanded(
+                            child: FractionallySizedBox(
+                              heightFactor: val > 0 ? (heightFactor * 0.85).clamp(0.08, 0.85) : 0.02,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                width: 14,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: isSelected 
+                                        ? [const Color(0xFFEAA622), const Color(0xFFF3C461)]
+                                        : [const Color(0xFF176B5B), const Color(0xFF2E9E82)],
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            monthName,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected 
+                                  ? (isDark ? Colors.white : Colors.black87) 
+                                  : Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -1,10 +1,17 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'models.dart';
-import 'formatters.dart';
 import 'premium.dart';
 import 'common_widgets.dart';
-import 'main.dart';
+import 'dividend_models.dart';
+import 'dividend_chart.dart';
+import 'dividend_stock_list.dart';
+import 'dividend_calendar.dart';
+
+export 'dividend_models.dart';
+export 'dividend_chart.dart';
+export 'dividend_stock_list.dart';
+export 'dividend_calendar.dart';
 
 class DividendTab extends StatefulWidget {
   const DividendTab({
@@ -36,168 +43,105 @@ class _DividendTabState extends State<DividendTab> {
     _selectedDay = DateTime.now();
   }
 
+  Widget _buildTabToggle(bool isDark) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF0EFEF),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Stack(
+        children: [
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            alignment: _showCalendar ? Alignment.centerRight : Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              child: Container(
+                margin: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (_showCalendar) setState(() => _showCalendar = false);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Text(
+                      '배당 현황',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: !_showCalendar ? FontWeight.bold : FontWeight.normal,
+                        color: !_showCalendar 
+                            ? (isDark ? Colors.white : Colors.black87)
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (!_showCalendar) setState(() => _showCalendar = true);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Text(
+                      '배당 달력',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: _showCalendar ? FontWeight.bold : FontWeight.normal,
+                        color: _showCalendar
+                            ? (isDark ? Colors.white : Colors.black87)
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // 1. Calculate real expected dividends from holdings
-    final Map<int, double> monthlyDividends = {for (var i = 1; i <= 12; i++) i: 0.0};
-    double annualTotal = 0.0;
-    double totalStockValuation = 0.0;
-    
-    final List<_UpcomingDividend> allDividends = [];
-    final List<_StockDividendSummary> stockSummaries = [];
+    // 계산 엔진 호출
+    final data = calculateDividendData(
+      holdings: widget.holdings,
+      lastExchangeRate: widget.storage.lastExchangeRate,
+      applyTax: _applyTax,
+    );
 
-    DateTime addMonths(DateTime date, int months) {
-      int newYear = date.year + (date.month + months - 1) ~/ 12;
-      int newMonth = (date.month + months - 1) % 12 + 1;
-      int newDay = date.day;
-      int maxDays = DateTime(newYear, newMonth + 1, 0).day;
-      if (newDay > maxDays) newDay = maxDays;
-      return DateTime(newYear, newMonth, newDay);
-    }
+    final double monthlyAverage = data.annualTotal / 12;
+    final double dividendYield = data.totalStockValuation > 0 
+        ? (data.annualTotal / data.totalStockValuation) * 100 
+        : 0.0;
 
-    for (var h in widget.holdings) {
-      if (h.type == AssetType.cash) continue;
-      
-      // Calculate total valuation of stocks/ETFs
-      totalStockValuation += (h.quantity * h.price);
-
-      if (h.dividends == null || h.dividends!.isEmpty) continue;
-
-      double exchangeRate = 1.0;
-      if (h.currency != 'KRW') {
-        if (h.originalPrice != null && h.originalPrice! > 0) {
-          exchangeRate = h.price / h.originalPrice!;
-        } else {
-          exchangeRate = widget.storage.lastExchangeRate;
-        }
-      }
-
-      double stockAnnualKrw = 0.0;
-      double stockAnnualForeign = 0.0;
-      final Set<int> paymentMonths = {};
-      final List<_UpcomingDividend> stockDividends = [];
-
-      // 전체 배당 내역을 날짜 내림차순(최신순) 정렬
-      final sortedDivs = List<Map<String, dynamic>>.from(h.dividends!)
-        ..sort((a, b) => (b['date'] as int).compareTo(a['date'] as int));
-      
-      final latestTimestamp = sortedDivs.first['date'] as int;
-      final currentTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      
-      // 배당 컷 방어: 마지막 배당락일이 400일(34560000초) 초과 시 배당 중단으로 간주
-      if ((currentTimestamp - latestTimestamp) > 34560000) {
-        continue;
-      }
-
-      // 배당 주기 감지 (Frequency Detection)
-      String freqLabel = '연배당';
-      int frequencyCount = 1;
-      if (sortedDivs.length > 1) {
-        final List<int> intervals = [];
-        for (int i = 0; i < sortedDivs.length - 1; i++) {
-          final d1 = DateTime.fromMillisecondsSinceEpoch((sortedDivs[i+1]['date'] as int) * 1000);
-          final d2 = DateTime.fromMillisecondsSinceEpoch((sortedDivs[i]['date'] as int) * 1000);
-          intervals.add(d2.difference(d1).inDays);
-        }
-        final double avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
-        
-        if (avgInterval <= 45) {
-          freqLabel = '월배당';
-          frequencyCount = 12;
-        } else if (avgInterval <= 120) {
-          freqLabel = '분기배당';
-          frequencyCount = 4;
-        } else if (avgInterval <= 240) {
-          freqLabel = '반기배당';
-          frequencyCount = 2;
-        } else {
-          freqLabel = '연배당';
-          frequencyCount = 1;
-        }
-      }
-
-      // 최신 배당금 1개 추출
-      final latestDiv = sortedDivs.first;
-      final latestDate = DateTime.fromMillisecondsSinceEpoch((latestDiv['date'] as int) * 1000);
-      double rawAmount = latestDiv['amount'] as double;
-      
-      // 세후 전환 적용
-      if (_applyTax) {
-        rawAmount = rawAmount * 0.846;
-      }
-      
-      final krwAmount = h.quantity * rawAmount * exchangeRate;
-      
-      // 미래 12개월(Forward Projection) 캘린더 생성
-      final int monthStep = 12 ~/ frequencyCount;
-      for (int i = 1; i <= frequencyCount; i++) {
-        final projectedDate = addMonths(latestDate, monthStep * i);
-        
-        DateTime paymentDate;
-        if (h.symbol != null && (h.symbol!.endsWith('.KS') || h.symbol!.endsWith('.KQ'))) {
-          if (projectedDate.month == 12) {
-            paymentDate = DateTime(projectedDate.year + 1, 4, 15);
-          } else {
-            paymentDate = projectedDate.add(const Duration(days: 60));
-          }
-        } else {
-          paymentDate = projectedDate.add(const Duration(days: 15));
-        }
-        
-        monthlyDividends[paymentDate.month] = (monthlyDividends[paymentDate.month] ?? 0.0) + krwAmount;
-        annualTotal += krwAmount;
-
-        stockAnnualKrw += krwAmount;
-        stockAnnualForeign += (h.quantity * rawAmount);
-        paymentMonths.add(paymentDate.month);
-
-        final upcomingDiv = _UpcomingDividend(
-          name: h.name,
-          symbol: h.symbol ?? '',
-          amountPerShare: rawAmount,
-          totalAmount: h.quantity * rawAmount,
-          currency: h.effectiveCurrency,
-          date: projectedDate,
-          paymentDate: paymentDate,
-          krwAmount: krwAmount,
-        );
-        
-        allDividends.add(upcomingDiv);
-        stockDividends.add(upcomingDiv);
-      }
-
-      if (stockAnnualKrw > 0) {
-        final monthsList = paymentMonths.toList()..sort();
-        stockDividends.sort((a, b) => b.date.compareTo(a.date));
-
-        stockSummaries.add(_StockDividendSummary(
-          name: h.name,
-          symbol: h.symbol ?? '',
-          totalAnnualAmount: stockAnnualForeign,
-          currency: h.effectiveCurrency,
-          totalKrwAmount: stockAnnualKrw,
-          paymentMonths: monthsList,
-          frequencyLabel: freqLabel,
-          dividends: stockDividends,
-        ));
-      }
-    }
-
-    // Sort summaries by totalKrwAmount descending
-    stockSummaries.sort((a, b) => b.totalKrwAmount.compareTo(a.totalKrwAmount));
-
-    // Sort dividends by date descending (most recent first)
-    allDividends.sort((a, b) => b.date.compareTo(a.date));
-
-    final double monthlyAverage = annualTotal / 12;
-    final double dividendYield = totalStockValuation > 0 ? (annualTotal / totalStockValuation) * 100 : 0.0;
-
-    // Filter dividends by selected month if active (by paymentDate.month!)
     final filteredDividends = _selectedMonth == null 
-        ? allDividends.take(15).toList() 
-        : allDividends.where((d) => d.paymentDate.month == _selectedMonth).toList();
+        ? data.allDividends.take(15).toList() 
+        : data.allDividends.where((d) => d.paymentDate.month == _selectedMonth).toList();
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -249,7 +193,6 @@ class _DividendTabState extends State<DividendTab> {
             Expanded(
               child: Stack(
                 children: [
-                  // 1. The Real Dashboard Content
                   if (!_showCalendar)
                     SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
@@ -257,501 +200,27 @@ class _DividendTabState extends State<DividendTab> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ── 1. 내 배당 요약 통합 카드 ──
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE5E0D7),
-                                width: 0.8,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Icon(
-                                            Icons.monetization_on_outlined,
-                                            size: 16,
-                                            color: Theme.of(context).colorScheme.primary,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '내 배당 요약',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w800,
-                                            color: isDark ? Colors.white : Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          '세후(15.4%) 적용',
-                                          style: TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w500,
-                                            color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 2),
-                                        SizedBox(
-                                          height: 26,
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Switch(
-                                              value: _applyTax,
-                                              onChanged: (val) {
-                                                setState(() {
-                                                  _applyTax = val;
-                                                });
-                                              },
-                                              activeThumbColor: Theme.of(context).colorScheme.primary,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildSummaryCard(
-                                        context,
-                                        title: '연간 예상 배당금',
-                                        value: annualTotal > 0 
-                                            ? '₩${_formatNumber(annualTotal.round())}' 
-                                            : '₩0',
-                                        color: isDark ? const Color(0xFF13584B) : const Color(0xFF176B5B),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: _buildSummaryCard(
-                                        context,
-                                        title: '월평균 배당금',
-                                        value: monthlyAverage > 0 
-                                            ? '₩${_formatNumber(monthlyAverage.round())}' 
-                                            : '₩0',
-                                        color: isDark ? const Color(0xFF945200) : const Color(0xFFAD5E00),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                _buildSummaryCard(
-                                  context,
-                                  title: '포트폴리오 예상 배당수익률',
-                                  value: '${dividendYield.toStringAsFixed(2)}%',
-                                  color: isDark ? const Color(0xFF262626) : const Color(0xFFF7F5F0),
-                                  isFullWidth: true,
-                                ),
-                              ],
-                            ),
+                          DividendSummaryHeader(
+                            annualTotal: data.annualTotal,
+                            monthlyAverage: monthlyAverage,
+                            dividendYield: dividendYield,
+                            applyTax: _applyTax,
+                            onApplyTaxChanged: (val) => setState(() => _applyTax = val),
                           ),
                           const SizedBox(height: 16),
-                          
-                          // ── 2. 월별 예상 배당금 흐름 통합 카드 ──
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE5E0D7),
-                                width: 0.8,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Icon(
-                                            Icons.bar_chart_rounded,
-                                            size: 16,
-                                            color: Theme.of(context).colorScheme.primary,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          _selectedMonth == null ? '월별 예상 배당금 흐름' : '$_selectedMonth월 배당금 흐름',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w800,
-                                            color: isDark ? Colors.white : Colors.black87,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        GestureDetector(
-                                          onTap: () {
-                                            showDialog(
-                                              context: context,
-                                              builder: (context) => AlertDialog(
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                                title: Row(
-                                                  children: [
-                                                    Icon(Icons.info_outline, color: Theme.of(context).colorScheme.primary),
-                                                    const SizedBox(width: 8),
-                                                    const Flexible(
-                                                      child: Text(
-                                                        '예상 배당금 산출 방식',
-                                                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                content: Text(
-                                                  '종목별로 가장 최근에 지급된 배당금을 기준으로, 각 배당 주기(월/분기/반기/연)에 맞춰 미래 1년 치 예상 배당액을 산출합니다.',
-                                                  style: TextStyle(
-                                                    height: 1.5,
-                                                    fontSize: 14,
-                                                    color: isDark ? Colors.white70 : Colors.black87,
-                                                  ),
-                                                ),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () => Navigator.pop(context),
-                                                    child: const Text('확인', style: TextStyle(fontWeight: FontWeight.bold)),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                          },
-                                          child: Icon(
-                                            Icons.help_outline,
-                                            size: 16,
-                                            color: isDark ? Colors.grey[400] : Colors.grey,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Visibility(
-                                      visible: _selectedMonth != null,
-                                      maintainSize: true,
-                                      maintainAnimation: true,
-                                      maintainState: true,
-                                      child: InkWell(
-                                        onTap: () => setState(() => _selectedMonth = null),
-                                        borderRadius: BorderRadius.circular(6),
-                                        child: const Padding(
-                                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          child: Text(
-                                            '전체보기',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF176B5B),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  height: 160,
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      double maxVal = monthlyDividends.values.fold(0.0, (max, val) => val > max ? val : max);
-                                      if (maxVal == 0.0) maxVal = 1.0;
-
-                                      return Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        children: List.generate(12, (index) {
-                                          final month = index + 1;
-                                          final monthName = '$month월';
-                                          final val = monthlyDividends[month] ?? 0.0;
-                                          final double heightFactor = val / maxVal;
-                                          final isSelected = _selectedMonth == month;
-
-                                          return GestureDetector(
-                                            onTap: () {
-                                              if (val > 0) {
-                                                setState(() {
-                                                  _selectedMonth = isSelected ? null : month;
-                                                });
-                                              }
-                                            },
-                                            child: Column(
-                                              mainAxisAlignment: MainAxisAlignment.end,
-                                              children: [
-                                                if (val > 0)
-                                                  Text(
-                                                    val >= 10000 
-                                                        ? '${(val / 10000).toStringAsFixed(1)}만' 
-                                                        : _formatNumber(val.round()),
-                                                    style: TextStyle(
-                                                      fontSize: 8,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: isSelected ? const Color(0xFFEAA622) : Colors.grey,
-                                                    ),
-                                                  ),
-                                                const SizedBox(height: 4),
-                                                Expanded(
-                                                  child: FractionallySizedBox(
-                                                    heightFactor: val > 0 ? (heightFactor * 0.85).clamp(0.08, 0.85) : 0.02,
-                                                    child: AnimatedContainer(
-                                                      duration: const Duration(milliseconds: 300),
-                                                      width: 14,
-                                                      decoration: BoxDecoration(
-                                                        gradient: LinearGradient(
-                                                          colors: isSelected 
-                                                              ? [const Color(0xFFEAA622), const Color(0xFFF3C461)]
-                                                              : [const Color(0xFF176B5B), const Color(0xFF2E9E82)],
-                                                          begin: Alignment.bottomCenter,
-                                                          end: Alignment.topCenter,
-                                                        ),
-                                                        borderRadius: BorderRadius.circular(4),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  monthName,
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                                    color: isSelected 
-                                                        ? (isDark ? Colors.white : Colors.black87) 
-                                                        : Colors.grey,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        }),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
+                          DividendFlowBarChart(
+                            monthlyDividends: data.monthlyDividends,
+                            selectedMonth: _selectedMonth,
+                            onMonthSelected: (m) => setState(() => _selectedMonth = m),
                           ),
                           const SizedBox(height: 16),
-
-                          // ── 3. 내 배당 포트폴리오 목록 통합 카드 ──
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE5E0D7),
-                                width: 0.8,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Icon(
-                                            Icons.pie_chart_outline_rounded,
-                                            size: 16,
-                                            color: Theme.of(context).colorScheme.primary,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          _selectedMonth == null ? '내 배당 포트폴리오' : '$_selectedMonth월 배당금 지급 일정',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w800,
-                                            color: isDark ? Colors.white : Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          '원화 환산',
-                                          style: TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w500,
-                                            color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 2),
-                                        SizedBox(
-                                          height: 26,
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Switch(
-                                              value: _showForeignInKrw,
-                                              onChanged: (val) {
-                                                setState(() {
-                                                  _showForeignInKrw = val;
-                                                });
-                                              },
-                                              activeThumbColor: Theme.of(context).colorScheme.primary,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                
-                                // 카드 내부 배당 리스트
-                                if (allDividends.isEmpty) ...[
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 4),
-                                    child: Text(
-                                      '※ 등록된 주식 자산에 아직 배당 데이터가 동기화되지 않았습니다. (예시 화면)',
-                                      style: TextStyle(color: Colors.grey, fontSize: 11, fontStyle: FontStyle.italic),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _buildDividendRow(
-                                    context,
-                                    symbol: 'AAPL',
-                                    name: '애플 주식 (예시)',
-                                    amount: '주당 \$0.25',
-                                    total: '₩3,450',
-                                    dateText: '5월 15일 지급',
-                                  ),
-                                  _buildDividendRow(
-                                    context,
-                                    symbol: '005930',
-                                    name: '삼성전자 주식 (예시)',
-                                    amount: '주당 361원',
-                                    total: '₩36,100',
-                                    dateText: '5월 20일 지급',
-                                  ),
-                                  _buildDividendRow(
-                                    context,
-                                    symbol: 'O',
-                                    name: '리얼티인컴 주식 (예시)',
-                                    amount: '주당 \$0.26',
-                                    total: '₩17,940',
-                                    dateText: '매월 15일 지급',
-                                  ),
-                                ] else ...[
-                                  if (_selectedMonth == null)
-                                    ListView.builder(
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      padding: EdgeInsets.zero,
-                                      itemCount: stockSummaries.length,
-                                      itemBuilder: (context, index) {
-                                        return _buildStockSummaryRow(context, stockSummaries[index], _showForeignInKrw);
-                                      },
-                                    )
-                                  else if (filteredDividends.isEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 36),
-                                      child: Center(
-                                        child: Text(
-                                          '$_selectedMonth월에는 지급된 배당금이 없습니다.',
-                                          style: const TextStyle(color: Colors.grey),
-                                        ),
-                                      ),
-                                    )
-                                  else
-                                    ListView.builder(
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      padding: EdgeInsets.zero,
-                                      itemCount: filteredDividends.length,
-                                      itemBuilder: (context, index) {
-                                        final div = filteredDividends[index];
-                                        final formattedNativeTotal = div.currency == 'KRW'
-                                            ? '₩${_formatNumber(div.krwAmount.round())}'
-                                            : '${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.totalAmount.toStringAsFixed(2)}';
-                                            
-                                        final displayTotal = (_showForeignInKrw || div.currency == 'KRW')
-                                            ? '₩${_formatNumber(div.krwAmount.round())}'
-                                            : formattedNativeTotal;
-                                            
-                                        String displayAmountPerShare;
-                                        if (div.currency == 'KRW') {
-                                          displayAmountPerShare = '주당 ${_formatNumber(div.amountPerShare.round())}원';
-                                        } else if (_showForeignInKrw) {
-                                          final double exchangeRate = div.totalAmount > 0 ? (div.krwAmount / div.totalAmount) : 1350.0;
-                                          final double krwPerShare = div.amountPerShare * exchangeRate;
-                                          displayAmountPerShare = '주당 ${_formatNumber(krwPerShare.round())}원';
-                                        } else {
-                                          displayAmountPerShare = '주당 ${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.amountPerShare.toStringAsFixed(2)}';
-                                        }
-                                        
-                                        return _buildDividendRow(
-                                          context,
-                                          symbol: div.symbol,
-                                          name: div.name,
-                                          amount: displayAmountPerShare,
-                                          total: displayTotal,
-                                          dateText: '예상 지급: ${div.paymentDate.year}/${div.paymentDate.month}/${div.paymentDate.day} | 배당락: ${div.date.year}/${div.date.month}/${div.date.day}',
-                                        );
-                                      },
-                                    ),
-                                ],
-                              ],
-                            ),
+                          DividendPortfolioList(
+                            allDividends: data.allDividends,
+                            stockSummaries: data.stockSummaries,
+                            filteredDividends: filteredDividends,
+                            selectedMonth: _selectedMonth,
+                            showForeignInKrw: _showForeignInKrw,
+                            onShowForeignInKrwChanged: (val) => setState(() => _showForeignInKrw = val),
                           ),
                           const SizedBox(height: 20),
                           Container(
@@ -783,9 +252,17 @@ class _DividendTabState extends State<DividendTab> {
                       ),
                     ),
                   if (_showCalendar)
-                    _buildCalendarView(context, isDark, allDividends),
+                    DividendCalendarView(
+                      allDividends: data.allDividends,
+                      focusedMonth: _focusedMonth,
+                      selectedDay: _selectedDay,
+                      showForeignInKrw: _showForeignInKrw,
+                      onFocusedMonthChanged: (m) => setState(() => _focusedMonth = m),
+                      onSelectedDayChanged: (d) => setState(() => _selectedDay = d),
+                      onShowForeignInKrwChanged: (val) => setState(() => _showForeignInKrw = val),
+                    ),
                   
-                  // 2. Premium Lock Blur Overlay (Visible if not premium)
+                  // 프리미엄 블러 오버레이
                   if (!widget.storage.isPremium)
                     Positioned.fill(
                       child: ClipRRect(
@@ -888,838 +365,4 @@ class _DividendTabState extends State<DividendTab> {
       ),
     );
   }
-
-  Widget _buildSummaryCard(
-    BuildContext context, {
-    required String title,
-    required String value,
-    required Color color,
-    bool isFullWidth = false,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isDarkBg = color.computeLuminance() < 0.35;
-    
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
-        border: !isDarkBg
-            ? Border.all(
-                color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
-                width: 0.8,
-              )
-            : null,
-        boxShadow: [
-          if (!isDarkBg)
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 1),
-            ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isDarkBg 
-                  ? Colors.white.withValues(alpha: 0.8) 
-                  : (isDark ? Colors.grey[400] : const Color(0xFF6E675E)),
-            ),
-          ),
-          const SizedBox(height: 8),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: isFullWidth ? 22 : 18,
-                fontWeight: FontWeight.w900,
-                color: isDarkBg 
-                    ? Colors.white 
-                    : (isDark ? Colors.white : const Color(0xFF1A1A1A)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDividendRow(
-    BuildContext context, {
-    required String symbol,
-    required String name,
-    required String amount,
-    required String total,
-    required String dateText,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF262626) : const Color(0xFFF8F6F2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFEDE9E1),
-          width: 0.6,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  symbol,
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                total,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14.5,
-                  color: Color(0xFF176B5B),
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                amount,
-                style: const TextStyle(fontSize: 10.5, color: Colors.grey),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                dateText,
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStockSummaryRow(BuildContext context, _StockDividendSummary summary, bool showForeignInKrw) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    final formattedNative = summary.currency == 'KRW'
-        ? '₩${_formatNumber(summary.totalKrwAmount.round())}'
-        : '${summary.currency == 'USD' ? '\$' : '${summary.currency} '}${summary.totalAnnualAmount.toStringAsFixed(2)}';
-        
-    final mainAmountStr = (showForeignInKrw || summary.currency == 'KRW') 
-        ? '₩${_formatNumber(summary.totalKrwAmount.round())}' 
-        : formattedNative;
-        
-    final secondaryAmountStr = (showForeignInKrw && summary.currency != 'KRW') 
-        ? formattedNative 
-        : '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF262626) : const Color(0xFFF8F6F2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFEDE9E1),
-          width: 0.6,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => _showDividendDetails(context, summary, showForeignInKrw),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF2E9E82).withValues(alpha: 0.2) : const Color(0xFFE6F4F1),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: const Color(0xFF2E9E82).withValues(alpha: 0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              summary.frequencyLabel,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF176B5B),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              summary.name,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${summary.symbol} | 예상 지급월: ${summary.paymentMonths.join(', ')}월',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      mainAmountStr,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF176B5B),
-                      ),
-                    ),
-                    if (secondaryAmountStr.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        secondaryAmountStr,
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showDividendDetails(BuildContext context, _StockDividendSummary summary, bool showForeignInKrw) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF121212) : const Color(0xFFF8FAF9),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            summary.name,
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${summary.symbol} · ${summary.frequencyLabel}',
-                            style: const TextStyle(fontSize: 14, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(20),
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: summary.dividends.length,
-                  itemBuilder: (context, index) {
-                    final div = summary.dividends[index];
-                    final formattedNativeTotal = div.currency == 'KRW'
-                        ? '₩${_formatNumber(div.krwAmount.round())}'
-                        : '${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.totalAmount.toStringAsFixed(2)}';
-                        
-                    final displayTotal = (showForeignInKrw || div.currency == 'KRW')
-                        ? '₩${_formatNumber(div.krwAmount.round())}'
-                        : formattedNativeTotal;
-                    
-                    return _buildDividendRow(
-                      context,
-                      symbol: '배당락일: ${div.date.year}.${div.date.month.toString().padLeft(2, '0')}.${div.date.day.toString().padLeft(2, '0')}',
-                      name: '${div.paymentDate.year}년 ${div.paymentDate.month}월 배당',
-                      amount: div.currency == 'KRW' 
-                          ? '주당 ${_formatNumber(div.amountPerShare.round())}원'
-                          : '주당 ${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.amountPerShare.toStringAsFixed(2)}',
-                      total: displayTotal,
-                      dateText: '지급예정: ${div.paymentDate.year}.${div.paymentDate.month.toString().padLeft(2, '0')}.${div.paymentDate.day.toString().padLeft(2, '0')}',
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  String _formatNumber(int number) {
-    final RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
-    return number.toString().replaceAllMapped(reg, (Match match) => '${match[1]},');
-  }
-
-  Widget _buildTabToggle(bool isDark) {
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF0EFEF),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Stack(
-        children: [
-          AnimatedAlign(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            alignment: _showCalendar ? Alignment.centerRight : Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: 0.5,
-              child: Container(
-                margin: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(9),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _showCalendar = false;
-                    });
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: Center(
-                    child: Text(
-                      '배당 현황',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: !_showCalendar ? FontWeight.bold : FontWeight.normal,
-                        color: !_showCalendar 
-                            ? (isDark ? Colors.white : Colors.black87)
-                            : Colors.grey,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _showCalendar = true;
-                    });
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: Center(
-                    child: Text(
-                      '배당 달력',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: _showCalendar ? FontWeight.bold : FontWeight.normal,
-                        color: _showCalendar
-                            ? (isDark ? Colors.white : Colors.black87)
-                            : Colors.grey,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalendarView(BuildContext context, bool isDark, List<_UpcomingDividend> allDividends) {
-    final int year = _focusedMonth.year;
-    final int month = _focusedMonth.month;
-    
-    final DateTime firstDay = DateTime(year, month, 1);
-    final int startOffset = firstDay.weekday % 7;
-    final int daysInMonth = DateTime(year, month + 1, 0).day;
-    
-    final int totalCells = startOffset + daysInMonth;
-    final int rowsCount = (totalCells / 7).ceil();
-    final int gridCellCount = rowsCount * 7;
-    
-    final List<String> weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-
-    final Map<int, List<_UpcomingDividend>> dailyDividends = {};
-    for (var div in allDividends) {
-      if (div.paymentDate.year == year && div.paymentDate.month == month) {
-        final day = div.paymentDate.day;
-        dailyDividends.putIfAbsent(day, () => []).add(div);
-      }
-    }
-
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      onPressed: () {
-                        setState(() {
-                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
-                          _selectedDay = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
-                        });
-                      },
-                    ),
-                    Text(
-                      '$year년 $month월',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      onPressed: () {
-                        setState(() {
-                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
-                          _selectedDay = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
-                        });
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: weekdays.map((day) {
-                    Color textColor = isDark ? Colors.grey[400]! : const Color(0xFF8C847A);
-                    if (day == '일') textColor = const Color(0xFFEAA622);
-                    if (day == '토') textColor = Colors.blue;
-                    return SizedBox(
-                      width: 32,
-                      child: Center(
-                        child: Text(
-                          day,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 8),
-                const Divider(height: 1, thickness: 0.5),
-                const SizedBox(height: 8),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 7,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 1,
-                  ),
-                  itemCount: gridCellCount,
-                  itemBuilder: (context, index) {
-                    final int dayNumber = index - startOffset + 1;
-                    final bool isActualDay = dayNumber > 0 && dayNumber <= daysInMonth;
-                    
-                    if (!isActualDay) {
-                      return const SizedBox.shrink();
-                    }
-                    
-                    final DateTime cellDate = DateTime(year, month, dayNumber);
-                    final bool isSelected = _selectedDay != null && 
-                        _selectedDay!.year == cellDate.year && 
-                        _selectedDay!.month == cellDate.month && 
-                        _selectedDay!.day == cellDate.day;
-                    
-                    final bool isToday = DateTime.now().year == cellDate.year && 
-                        DateTime.now().month == cellDate.month && 
-                        DateTime.now().day == cellDate.day;
-                    
-                    final hasDividends = dailyDividends.containsKey(dayNumber);
-                    
-                    Color textColor = isDark ? Colors.white : Colors.black87;
-                    if (index % 7 == 0) textColor = const Color(0xFFEAA622);
-                    if (index % 7 == 6) textColor = Colors.blue;
-                    
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedDay = cellDate;
-                        });
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isSelected 
-                              ? const Color(0xFF176B5B) 
-                              : (isToday ? (isDark ? const Color(0xFF2C2C2C) : const Color(0xFFEFEFEF)) : Colors.transparent),
-                          border: isToday && !isSelected
-                              ? Border.all(color: const Color(0xFF176B5B), width: 1)
-                              : null,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              dayNumber.toString(),
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.normal,
-                                color: isSelected ? Colors.white : textColor,
-                              ),
-                            ),
-                            if (hasDividends) ...[
-                              const SizedBox(height: 2),
-                              Container(
-                                width: 4,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isSelected ? Colors.white : const Color(0xFFEAA622),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          if (_selectedDay != null) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  '${_selectedDay!.month}월 ${_selectedDay!.day}일 배당 정보',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '해외자산 원화 환산',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    SizedBox(
-                      height: 28,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Switch(
-                          value: _showForeignInKrw,
-                          onChanged: (val) {
-                            setState(() {
-                              _showForeignInKrw = val;
-                            });
-                          },
-                          activeThumbColor: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildDailyDividendList(context, isDark, dailyDividends[_selectedDay!.day] ?? []),
-          ],
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDailyDividendList(BuildContext context, bool isDark, List<_UpcomingDividend> dayDividends) {
-    if (dayDividends.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Icon(Icons.calendar_today, size: 40, color: Colors.grey[500]),
-            const SizedBox(height: 12),
-            Text(
-              '이 날짜에는 예정된 배당금이 없습니다.',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    return Column(
-      children: dayDividends.map((div) {
-        final formattedNativeTotal = div.currency == 'KRW'
-            ? '₩${_formatNumber(div.krwAmount.round())}'
-            : '${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.totalAmount.toStringAsFixed(2)}';
-            
-        final displayTotal = (_showForeignInKrw || div.currency == 'KRW')
-            ? '₩${_formatNumber(div.krwAmount.round())}'
-            : formattedNativeTotal;
-            
-        String displayAmountPerShare;
-        if (div.currency == 'KRW') {
-          displayAmountPerShare = '주당 ${_formatNumber(div.amountPerShare.round())}원';
-        } else if (_showForeignInKrw) {
-          final double exchangeRate = div.totalAmount > 0 ? (div.krwAmount / div.totalAmount) : 1350.0;
-          final double krwPerShare = div.amountPerShare * exchangeRate;
-          displayAmountPerShare = '주당 ${_formatNumber(krwPerShare.round())}원';
-        } else {
-          displayAmountPerShare = '주당 ${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.amountPerShare.toStringAsFixed(2)}';
-        }
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF176B5B).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.show_chart,
-                  color: Color(0xFF176B5B),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      div.name,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      div.symbol,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    displayTotal,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF176B5B),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    displayAmountPerShare,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _UpcomingDividend {
-  final String name;
-  final String symbol;
-  final double amountPerShare;
-  final double totalAmount;
-  final String currency;
-  final DateTime date;
-  final DateTime paymentDate;
-  final double krwAmount;
-
-  _UpcomingDividend({
-    required this.name,
-    required this.symbol,
-    required this.amountPerShare,
-    required this.totalAmount,
-    required this.currency,
-    required this.date,
-    required this.paymentDate,
-    required this.krwAmount,
-  });
-}
-
-class _StockDividendSummary {
-  final String name;
-  final String symbol;
-  final double totalAnnualAmount;
-  final String currency;
-  final double totalKrwAmount;
-  final List<int> paymentMonths;
-  final String frequencyLabel;
-  final List<_UpcomingDividend> dividends;
-
-  _StockDividendSummary({
-    required this.name,
-    required this.symbol,
-    required this.totalAnnualAmount,
-    required this.currency,
-    required this.totalKrwAmount,
-    required this.paymentMonths,
-    required this.frequencyLabel,
-    required this.dividends,
-  });
 }

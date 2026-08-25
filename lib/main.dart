@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -565,6 +566,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
     final projectedValue = _projection.isEmpty ? 0.0 : _projection.last.total;
     final gain = projectedValue - _currentValue;
 
@@ -654,19 +657,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
         ],
       ),
       bottomNavigationBar: Container(
+
         decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF161616) : Colors.white,
+          color: isDark ? const Color(0xFF161616) : Colors.white,
           border: Border(
             top: BorderSide(
-              color: Theme.of(context).brightness == Brightness.dark 
-                  ? const Color(0xFF262626) 
-                  : const Color(0xFFE8E4DC),
+              color: isDark ? const Color(0xFF262626) : const Color(0xFFE8E4DC),
               width: 0.8,
             ),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.4 : 0.05),
+              color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
               blurRadius: 16,
               offset: const Offset(0, -4),
             ),
@@ -678,69 +680,42 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             mainAxisSize: MainAxisSize.min,
             children: [
               const AdBannerWidget(),
-              Theme(
-                data: Theme.of(context).copyWith(
-                  splashColor: Colors.transparent,
-                  highlightColor: Colors.transparent,
-                ),
-                child: BottomNavigationBar(
-                  elevation: 0,
-                  currentIndex: _currentIndex,
-                  onTap: (index) => setState(() => _currentIndex = index),
-                  selectedItemColor: Theme.of(context).colorScheme.primary,
-                  unselectedItemColor: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF757575)
-                      : const Color(0xFF8F887D),
-                  backgroundColor: Colors.transparent,
-                  type: BottomNavigationBarType.fixed,
-                  selectedFontSize: 11,
-                  unselectedFontSize: 11,
-                  selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, height: 1.4),
-                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, height: 1.4),
-                  items: const [
-                    BottomNavigationBarItem(
-                      icon: Padding(
-                        padding: EdgeInsets.only(bottom: 2),
-                        child: Icon(Icons.account_balance_wallet_outlined, size: 22),
-                      ),
-                      activeIcon: Padding(
-                        padding: EdgeInsets.only(bottom: 2),
-                        child: Icon(Icons.account_balance_wallet, size: 22),
-                      ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildNavItem(
+                      index: 0,
                       label: '내 자산',
+                      icon: Icons.account_balance_wallet_outlined,
+                      activeIcon: Icons.account_balance_wallet_rounded,
+                      isDark: isDark,
+                      primaryColor: primaryColor,
                     ),
-                    BottomNavigationBarItem(
-                      icon: Padding(
-                        padding: EdgeInsets.only(bottom: 2),
-                        child: Icon(Icons.savings_outlined, size: 22),
-                      ),
-                      activeIcon: Padding(
-                        padding: EdgeInsets.only(bottom: 2),
-                        child: Icon(Icons.savings, size: 22),
-                      ),
+                    _buildNavItem(
+                      index: 1,
                       label: '연금/절세',
+                      icon: Icons.savings_outlined,
+                      activeIcon: Icons.savings_rounded,
+                      isDark: isDark,
+                      primaryColor: primaryColor,
                     ),
-                    BottomNavigationBarItem(
-                      icon: Padding(
-                        padding: EdgeInsets.only(bottom: 2),
-                        child: Icon(Icons.analytics_outlined, size: 22),
-                      ),
-                      activeIcon: Padding(
-                        padding: EdgeInsets.only(bottom: 2),
-                        child: Icon(Icons.analytics, size: 22),
-                      ),
+                    _buildNavItem(
+                      index: 2,
                       label: '시뮬레이션',
+                      icon: Icons.auto_graph_outlined,
+                      activeIcon: Icons.auto_graph_rounded,
+                      isDark: isDark,
+                      primaryColor: primaryColor,
                     ),
-                    BottomNavigationBarItem(
-                      icon: Padding(
-                        padding: EdgeInsets.only(bottom: 2),
-                        child: Icon(Icons.calendar_month_outlined, size: 22),
-                      ),
-                      activeIcon: Padding(
-                        padding: EdgeInsets.only(bottom: 2),
-                        child: Icon(Icons.calendar_month, size: 22),
-                      ),
+                    _buildNavItem(
+                      index: 3,
                       label: '배당',
+                      icon: Icons.calendar_month_outlined,
+                      activeIcon: Icons.calendar_month_rounded,
+                      isDark: isDark,
+                      primaryColor: primaryColor,
                     ),
                   ],
                 ),
@@ -751,6 +726,68 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       ),
     );
   }
+
+  Widget _buildNavItem({
+    required int index,
+    required String label,
+    required IconData icon,
+    required IconData activeIcon,
+    required bool isDark,
+    required Color primaryColor,
+  }) {
+    final isSelected = _currentIndex == index;
+    final activeColor = isDark ? const Color(0xFF34D399) : primaryColor;
+    final inactiveColor = isDark ? const Color(0xFF757575) : const Color(0xFF8F887D);
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          if (_currentIndex != index) {
+            HapticFeedback.selectionClick();
+            setState(() => _currentIndex = index);
+          }
+        },
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? (isDark ? const Color(0xFF1E3A33) : const Color(0xFFE8F5F1))
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isSelected ? activeIcon : icon,
+                  size: 22,
+                  color: isSelected ? activeColor : inactiveColor,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? activeColor : inactiveColor,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 
   Future<void> _showPremiumLimitDialog(String content) async {
     final upgrade = await showDialog<bool>(
@@ -814,7 +851,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     final holding = await showModalBottomSheet<Holding>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
+      backgroundColor: Colors.transparent,
+      showDragHandle: false,
       builder: (context) => const HoldingFormSheet(),
     );
 
@@ -866,7 +904,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     final holding = await showModalBottomSheet<Holding>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
+      backgroundColor: Colors.transparent,
+      showDragHandle: false,
       builder: (context) =>
           HoldingFormSheet(initialHolding: originalHolding),
     );

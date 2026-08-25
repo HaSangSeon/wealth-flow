@@ -39,8 +39,9 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
     if (widget.holdings.isEmpty) return const SizedBox.shrink();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
 
-    // 데이터 집계
+    // 1. 데이터 집계
     final assetValues = <AssetType, double>{};
     final accountValues = <AccountType, double>{};
 
@@ -58,10 +59,10 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
       final types = [AssetType.koreanStock, AssetType.usStock, AssetType.etf, AssetType.cash];
       final labels = ['국내주식', '해외주식', 'ETF', '현금/기타'];
       final palette = [
-        const Color(0xFF26A68A), // 국내주식
-        const Color(0xFFEAA622), // 해외주식
-        const Color(0xFF2A8B79), // ETF
-        const Color(0xFF8E867C), // 현금/기타
+        const Color(0xFF176B5B), // 국내주식 (에메랄드)
+        const Color(0xFF2563EB), // 해외주식 (로열블루)
+        const Color(0xFFEAA622), // ETF (앰버골드)
+        const Color(0xFF8E867C), // 현금/기타 (슬레이트)
       ];
 
       for (int i = 0; i < types.length; i++) {
@@ -71,13 +72,13 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
         colors.add(palette[i]);
       }
     } else {
-      final accounts = [AccountType.general, AccountType.pension, AccountType.irp, AccountType.isa];
-      final labels = ['일반계좌', '연금저축', 'IRP', 'ISA'];
+      final accounts = [AccountType.general, AccountType.isa, AccountType.pension, AccountType.irp];
+      final labels = ['일반계좌', 'ISA', '연금저축', 'IRP'];
       final palette = [
         const Color(0xFF176B5B), // 일반계좌
-        const Color(0xFFEAA622), // 연금저축
-        const Color(0xFFD46A00), // IRP
-        const Color(0xFF4A90E2), // ISA
+        const Color(0xFF2563EB), // ISA
+        const Color(0xFF7C3AED), // 연금저축
+        const Color(0xFFDB2777), // IRP
       ];
 
       for (int i = 0; i < accounts.length; i++) {
@@ -105,9 +106,7 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
     }
     displayData.sort((a, b) => b.value.compareTo(a.value));
 
-    final largestPercentText = displayData.isNotEmpty 
-        ? '${displayData.first.percent.toStringAsFixed(0)}%' 
-        : '0%';
+    final topItem = displayData.isNotEmpty ? displayData.first : null;
 
     return Container(
       width: double.infinity,
@@ -116,38 +115,59 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFEBE6DD),
-          width: 1,
+          color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE5E0D7),
+          width: 0.8,
         ),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                )
-              ],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── 1. 헤더 (타이틀 + 세그먼트 토글 칩) ──
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                '자산 비중 분석',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.pie_chart_rounded,
+                      size: 16,
+                      color: primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    '자산 비중 분석',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
               ),
               Container(
                 height: 32,
-                padding: const EdgeInsets.all(2),
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFEFECE6),
-                  borderRadius: BorderRadius.circular(8),
+                  color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF2EFE9),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF383838) : const Color(0xFFE5E0D7),
+                    width: 0.7,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -156,6 +176,7 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
                       isSelected: _showByAssetClass,
                       onTap: () => setState(() => _showByAssetClass = true),
                     ),
+                    const SizedBox(width: 2),
                     _buildToggleButton(
                       label: '계좌별',
                       isSelected: !_showByAssetClass,
@@ -166,49 +187,59 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
+
+          // ── 2. 도넛 차트 & 상세 리스트 ──
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // 도넛 링 차트 (중앙에 1위 비중 및 라벨)
               SizedBox(
-                width: 100,
-                height: 100,
+                width: 104,
+                height: 104,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     CustomPaint(
-                      size: const Size(90, 90),
+                      size: const Size(96, 96),
                       painter: DonutChartPainter(
                         values: values,
                         colors: colors,
-                        strokeWidth: 10,
+                        strokeWidth: 11,
                       ),
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _showByAssetClass ? '최대 비중' : '최대 계좌',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.grey[500],
-                            fontWeight: FontWeight.bold,
+                    if (topItem != null)
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            topItem.label,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          largestPercentText,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: Theme.of(context).colorScheme.primary,
+                          const SizedBox(height: 1),
+                          Text(
+                            '${topItem.percent.toStringAsFixed(0)}%',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                              color: topItem.color,
+                              letterSpacing: -0.5,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 18),
+
+              // 우측 레전드 리스트 (색상 바, 라벨, 비중%, 평가금액)
               Expanded(
                 child: Column(
                   children: List.generate(displayData.length, (index) {
@@ -218,38 +249,48 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
                       child: Row(
                         children: [
                           Container(
-                            width: 10,
-                            height: 10,
+                            width: 7,
+                            height: 7,
                             decoration: BoxDecoration(
                               color: item.color,
-                              borderRadius: BorderRadius.circular(3),
+                              shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 7),
                           Expanded(
                             child: Text(
                               item.label,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: item.color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '${item.percent.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: item.color,
                               ),
                             ),
                           ),
-                          Text(
-                            '${item.percent.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.grey[300] : const Color(0xFF2C2C2C),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 8),
                           Text(
                             formatCurrency(item.value),
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[500],
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
                             ),
                           ),
                         ],
@@ -271,22 +312,24 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
     required VoidCallback onTap,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        alignment: Alignment.center,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected
-              ? (isDark ? const Color(0xFF176B5B) : Colors.white)
+              ? (isDark ? const Color(0xFF383838) : Colors.white)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          boxShadow: isSelected && !isDark
+          borderRadius: BorderRadius.circular(7),
+          boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
                     blurRadius: 4,
-                    offset: const Offset(0, 2),
+                    offset: const Offset(0, 1),
                   )
                 ]
               : null,
@@ -294,11 +337,11 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
+            fontSize: 11.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
             color: isSelected
-                ? (isDark ? Colors.white : const Color(0xFF176B5B))
-                : (isDark ? Colors.grey[400] : const Color(0xFF6E675E)),
+                ? (isDark ? const Color(0xFF34D399) : primaryColor)
+                : (isDark ? Colors.grey[400] : const Color(0xFF7A7265)),
           ),
         ),
       ),
@@ -314,7 +357,7 @@ class DonutChartPainter extends CustomPainter {
   DonutChartPainter({
     required this.values,
     required this.colors,
-    this.strokeWidth = 10.0,
+    this.strokeWidth = 11.0,
   });
 
   @override
@@ -332,19 +375,20 @@ class DonutChartPainter extends CustomPainter {
       return;
     }
 
-    double startAngle = -1.57079632679; // Top start (-90 degrees)
+    double startAngle = -math.pi / 2; // -90 degrees from top
     final rect = Rect.fromCircle(center: center, radius: radius);
 
     for (int i = 0; i < values.length; i++) {
       if (values[i] == 0) continue;
-      final sweepAngle = (values[i] / total) * 6.28318530718;
-      
+      final sweepAngle = (values[i] / total) * 2 * math.pi;
+
       final paint = Paint()
         ..color = colors[i % colors.length]
         ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
         ..strokeWidth = strokeWidth;
 
-      canvas.drawArc(rect, startAngle, sweepAngle, false, paint);
+      canvas.drawArc(rect, startAngle + 0.03, sweepAngle - 0.06, false, paint);
       startAngle += sweepAngle;
     }
   }
@@ -354,5 +398,3 @@ class DonutChartPainter extends CustomPainter {
     return oldDelegate.values != values || oldDelegate.colors != colors;
   }
 }
-
-

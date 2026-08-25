@@ -47,11 +47,6 @@ class AssetManagementTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final grouped = <AccountType, double>{};
-    for (final holding in holdings) {
-      grouped[holding.account] = (grouped[holding.account] ?? 0) + holding.value;
-    }
-
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -257,82 +252,7 @@ class AssetManagementTab extends StatelessWidget {
                       PortfolioNewsCarousel(key: portfolioNewsKey, holdings: holdings),
                       const SizedBox(height: 16),
 
-                      // 4. 계좌별 자산 현황 (독립된 박스 카드)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE5E0D7),
-                            width: 0.8,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    Icons.account_balance_outlined,
-                                    size: 16,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  '계좌별 자산 현황',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: AccountType.values.map((account) {
-                                final val = grouped[account] ?? 0;
-                                return Chip(
-                                  label: Text('${account.label} ${formatCurrency(val)}'),
-                                  backgroundColor: val > 0
-                                      ? (isDark ? const Color(0xFF1A3D36) : const Color(0xFFE8F0EA))
-                                      : (isDark ? const Color(0xFF282828) : const Color(0xFFF3EFE9)),
-                                  labelStyle: TextStyle(
-                                    color: val > 0
-                                        ? (isDark ? const Color(0xFF26A68A) : const Color(0xFF176B5B))
-                                        : (isDark ? Colors.grey[400] : const Color(0xFF8C847A)),
-                                    fontWeight: val > 0 ? FontWeight.w700 : FontWeight.normal,
-                                    fontSize: 12.5,
-                                  ),
-                                  side: BorderSide.none,
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                );
-                              }).toList(),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 5. 자산 배분 현황 카드
+                      // 4. 자산 비중 분석 (자산군별 / 계좌별 분석 통합 카드)
                       PortfolioAllocationCard(
                         holdings: holdings,
                         lastExchangeRate: lastExchangeRate,
