@@ -223,10 +223,9 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 소득 구간 토글
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.center,
+                          // 소득 구간 토글 (안드로이드 기기 대응 50:50 풀위드 세그먼트)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 '연봉(소득) 구간',
@@ -236,7 +235,9 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                                   color: isDark ? Colors.grey[300] : const Color(0xFF5E574E),
                                 ),
                               ),
+                              const SizedBox(height: 8),
                               Container(
+                                width: double.infinity,
                                 padding: const EdgeInsets.all(3),
                                 decoration: BoxDecoration(
                                   color: isDark ? const Color(0xFF262626) : const Color(0xFFF5F3EE),
@@ -248,19 +249,24 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                                 ),
                                 child: Row(
                                   children: [
-                                    _buildIncomeTab(
-                                      isSelected: _incomeUnder55,
-                                      label: '5.5천 이하 (16.5%)',
-                                      onTap: () => setState(() => _incomeUnder55 = true),
-                                      isDark: isDark,
-                                      primaryColor: primaryColor,
+                                    Expanded(
+                                      child: _buildIncomeTab(
+                                        isSelected: _incomeUnder55,
+                                        label: '5,500만 이하 (16.5%)',
+                                        onTap: () => setState(() => _incomeUnder55 = true),
+                                        isDark: isDark,
+                                        primaryColor: primaryColor,
+                                      ),
                                     ),
-                                    _buildIncomeTab(
-                                      isSelected: !_incomeUnder55,
-                                      label: '5.5천 초과 (13.2%)',
-                                      onTap: () => setState(() => _incomeUnder55 = false),
-                                      isDark: isDark,
-                                      primaryColor: primaryColor,
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: _buildIncomeTab(
+                                        isSelected: !_incomeUnder55,
+                                        label: '5,500만 초과 (13.2%)',
+                                        onTap: () => setState(() => _incomeUnder55 = false),
+                                        isDark: isDark,
+                                        primaryColor: primaryColor,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -640,7 +646,8 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark ? const Color(0xFF383838) : Colors.white)
@@ -658,8 +665,11 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
         ),
         child: Text(
           label,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            fontSize: 11.5,
+            fontSize: 12,
             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
             color: isSelected
                 ? (isDark ? const Color(0xFF34D399) : primaryColor)
