@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart' as xml;
+import 'models.dart';
 
 class YahooFinanceSearchResult {
   final String symbol;
@@ -115,62 +116,244 @@ class YahooFinanceService {
     }
   }
 
-  String _buildRelevanceQuery(String query) {
-    final hasKorean = RegExp(r'[\uac00-\ud7a3]').hasMatch(query);
-    if (hasKorean) {
-      return '$query (주가 OR 실적 OR 전망 OR 공시 OR 특허 OR 인수 OR 소송 OR 사업 OR 시장 OR 투자 OR 분석)';
-    } else {
-      return '$query (stock OR earnings OR outlook OR "share price" OR "target price" OR acquisition OR lawsuit OR business OR market OR investment OR analysis)';
-    }
+  String _unescapeHtml(String text) {
+    return text
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        .replaceAll('&#39;', "'")
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll(RegExp(r'</?b>'), '')
+        .trim();
   }
 
-  /// 사용자가 보유한 종목들의 최신 뉴스를 가져옵니다 (Google News RSS).
-  Future<List<Map<String, dynamic>>> fetchPortfolioNews(List<String> queries) async {
+  int _parseNaverDateTime(String dt) {
+    try {
+      if (dt.length >= 12) {
+        final year = int.parse(dt.substring(0, 4));
+        final month = int.parse(dt.substring(4, 6));
+        final day = int.parse(dt.substring(6, 8));
+        final hour = int.parse(dt.substring(8, 10));
+        final minute = int.parse(dt.substring(10, 12));
+        return DateTime(year, month, day, hour, minute).millisecondsSinceEpoch ~/ 1000;
+      }
+    } catch (_) {}
+    return DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  }
+
+  bool _isSpamArticle(String title, String publisher) {
+    final lowerPub = publisher.toLowerCase();
+    final lowerTit = title.toLowerCase();
+
+    const spamPublishers = [
+      'tradingkey',
+      'mshale',
+      'cryptorank',
+    ];
+    for (final sp in spamPublishers) {
+      if (lowerPub.contains(sp)) return true;
+    }
+
+    if (lowerTit.contains('주식 시작했습니다') ||
+        lowerTit.contains('주식 움직였습니다') ||
+        lowerTit.contains('tokenized') ||
+        RegExp(r'\|.*가격:.*\|Chg%:').hasMatch(title)) {
+      return true;
+    }
+    return false;
+  }
+
+  String _buildSmartRelevanceQuery(Holding h) {
+    final name = h.name.trim();
+    final symbol = (h.symbol ?? '').split('.').first.toUpperCase().trim();
+
+    const Map<String, String> aliasMap = {
+      'AAPL': '애플',
+      'TSLA': '테슬라',
+      'NVDA': '엔비디아',
+      'MSFT': '마이크로소프트',
+      'AMZN': '아마존',
+      'GOOGL': '구글',
+      'GOOG': '구글',
+      'META': '메타',
+      'NFLX': '넷플릭스',
+      'AMD': 'AMD',
+      'INTC': '인텔',
+      'PLTR': '팔란티어',
+      'COIN': '코인베이스',
+      'AVGO': '브로드컴',
+      'ASML': 'ASML',
+      'TSM': 'TSMC',
+      'SCHD': 'SCHD 슈드',
+      'JEPI': 'JEPI',
+      'JEPQ': 'JEPQ',
+      'QQQ': 'QQQ',
+      'SPY': 'SPY',
+      'VOO': 'VOO',
+      'TLT': 'TLT',
+      'O': '리얼티인컴',
+    };
+
+    String cleanName = name
+        .replaceAll(RegExp(r'\s*(Inc\.?|Corp\.?|Corporation|Ltd\.?|Company|Co\.?)\s*', caseSensitive: false), '')
+        .trim();
+
+    final alias = aliasMap[symbol];
+    final terms = <String>{};
+    if (alias != null) terms.add(alias);
+    if (cleanName.isNotEmpty && cleanName != alias) terms.add(cleanName);
+    if (symbol.isNotEmpty && symbol.length <= 5 && !RegExp(r'^\d+$').hasMatch(symbol)) {
+      terms.add(symbol);
+    }
+
+    final target = terms.length > 1 ? '(${terms.join(' OR ')})' : (terms.firstOrNull ?? name);
+    return '$target (주가 OR 실적 OR 전망 OR 공시 OR 투자 OR 분석 OR ETF OR 배당)';
+  }
+
+  /// 사용자가 보유한 종목들의 최신 뉴스를 가져옵니다 (네이버 증권 공식 API + 스마트 구글 뉴스 하이브리드).
+  Future<List<Map<String, dynamic>>> fetchPortfolioNews(dynamic input) async {
     final List<Map<String, dynamic>> allNews = [];
     final Set<String> seenUrls = {};
+    final Set<String> seenTitles = {};
 
-    final targetQueries = queries.take(5).toList();
+    List<Holding> targetHoldings = [];
+    if (input is List<Holding>) {
+      targetHoldings = input
+          .where((h) => h.type != AssetType.cash && h.name.isNotEmpty && h.name != '현금')
+          .toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+    } else if (input is List<String>) {
+      targetHoldings = input
+          .where((n) => n.isNotEmpty && n != '현금')
+          .map((n) => Holding(
+                name: n,
+                type: AssetType.koreanStock,
+                account: AccountType.general,
+                quantity: 1,
+                price: 1,
+              ))
+          .toList();
+    }
 
-    for (final query in targetQueries) {
-      try {
-        final refinedQuery = _buildRelevanceQuery(query);
-        final encodedQuery = Uri.encodeComponent(refinedQuery);
-        final url = Uri.parse('https://news.google.com/rss/search?q=$encodedQuery&hl=ko&gl=KR&ceid=KR:ko');
-        final response = await http.get(url, headers: {'User-Agent': _userAgent});
+    if (targetHoldings.isEmpty) return [];
 
-        if (response.statusCode == 200) {
-          final document = xml.XmlDocument.parse(response.body);
-          final items = document.findAllElements('item').take(2);
+    final topHoldings = targetHoldings.take(8).toList();
 
-          for (final item in items) {
-            final title = item.findElements('title').firstOrNull?.innerText ?? '';
-            final link = item.findElements('link').firstOrNull?.innerText ?? '';
-            final pubDateStr = item.findElements('pubDate').firstOrNull?.innerText ?? '';
-            final source = item.findElements('source').firstOrNull?.innerText ?? 'Google News';
+    for (final h in topHoldings) {
+      final symbol = (h.symbol ?? '').trim();
+      final name = h.name.trim();
+      final isKoreanStock = symbol.endsWith('.KS') || symbol.endsWith('.KQ') || RegExp(r'^\d{6}').hasMatch(symbol);
 
-            if (link.isEmpty || seenUrls.contains(link)) continue;
+      bool foundNaverNews = false;
 
-            seenUrls.add(link);
+      // 1. 국내 주식: 네이버 증권 공식 종목 뉴스 API (100% 제도권 언론사 + 썸네일 + 요약문)
+      if (isKoreanStock) {
+        final code = symbol.split('.').first;
+        try {
+          final naverUrl = Uri.parse('https://m.stock.naver.com/api/news/stock/$code?pageSize=3&page=1');
+          final response = await http.get(
+            naverUrl,
+            headers: {'User-Agent': _userAgent},
+          ).timeout(const Duration(seconds: 3));
 
-            int timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-            try {
-              timestamp = HttpDate.parse(pubDateStr).millisecondsSinceEpoch ~/ 1000;
-            } catch (_) {}
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            if (data is List && data.isNotEmpty) {
+              for (final group in data) {
+                final items = group['items'] as List<dynamic>? ?? [];
+                for (final item in items) {
+                  final rawTitle = item['title'] as String? ?? '';
+                  final title = _unescapeHtml(rawTitle);
+                  final link = item['mobileNewsUrl'] as String? ?? '';
+                  final publisher = item['officeName'] as String? ?? '';
+                  final body = _unescapeHtml(item['body'] as String? ?? '');
+                  final image = item['imageOriginLink'] as String? ?? '';
+                  final dtStr = item['datetime'] as String? ?? '';
 
-            allNews.add({
-              'query': query,
-              'title': title,
-              'publisher': source,
-              'link': link,
-              'providerPublishTime': timestamp,
-            });
+                  if (link.isEmpty || title.isEmpty || seenUrls.contains(link) || seenTitles.contains(title)) {
+                    continue;
+                  }
+
+                  seenUrls.add(link);
+                  seenTitles.add(title);
+                  foundNaverNews = true;
+
+                  allNews.add({
+                    'query': name,
+                    'holdingName': name,
+                    'symbol': symbol,
+                    'title': title,
+                    'publisher': publisher,
+                    'link': link,
+                    'summary': body,
+                    'imageUrl': image.isNotEmpty ? image : null,
+                    'providerPublishTime': _parseNaverDateTime(dtStr),
+                  });
+                }
+              }
+            }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
+
+      // 2. 해외 주식, ETF 또는 네이버 뉴스 결과가 없는 종목: 스마트 구글 뉴스 RSS
+      if (!foundNaverNews) {
+        try {
+          final refinedQuery = _buildSmartRelevanceQuery(h);
+          final encodedQuery = Uri.encodeComponent(refinedQuery);
+          final url = Uri.parse('https://news.google.com/rss/search?q=$encodedQuery&hl=ko&gl=KR&ceid=KR:ko');
+          final response = await http.get(url, headers: {'User-Agent': _userAgent}).timeout(const Duration(seconds: 3));
+
+          if (response.statusCode == 200) {
+            final document = xml.XmlDocument.parse(response.body);
+            final items = document.findAllElements('item').take(3);
+
+            for (final item in items) {
+              String title = item.findElements('title').firstOrNull?.innerText ?? '';
+              final link = item.findElements('link').firstOrNull?.innerText ?? '';
+              final pubDateStr = item.findElements('pubDate').firstOrNull?.innerText ?? '';
+              final source = item.findElements('source').firstOrNull?.innerText ?? 'Google News';
+
+              if (link.isEmpty || title.isEmpty || seenUrls.contains(link) || seenTitles.contains(title)) {
+                continue;
+              }
+
+              if (_isSpamArticle(title, source)) continue;
+
+              final dashIdx = title.lastIndexOf(' - ');
+              if (dashIdx != -1 && dashIdx > title.length - 20) {
+                title = title.substring(0, dashIdx).trim();
+              }
+
+              seenUrls.add(link);
+              seenTitles.add(title);
+
+              int timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+              try {
+                timestamp = HttpDate.parse(pubDateStr).millisecondsSinceEpoch ~/ 1000;
+              } catch (_) {}
+
+              allNews.add({
+                'query': name,
+                'holdingName': name,
+                'symbol': symbol,
+                'title': title,
+                'publisher': source,
+                'link': link,
+                'summary': '',
+                'imageUrl': null,
+                'providerPublishTime': timestamp,
+              });
+            }
+          }
+        } catch (_) {}
+      }
     }
 
     allNews.sort((a, b) => (b['providerPublishTime'] as int).compareTo(a['providerPublishTime'] as int));
-    return allNews;
+    return allNews.take(15).toList();
   }
 
   bool _isChoseongOnly(String text) {

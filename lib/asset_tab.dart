@@ -28,6 +28,7 @@ class AssetManagementTab extends StatelessWidget {
     required this.onRefresh,
     required this.onPremiumChanged,
     required this.onProfileTap,
+    this.onDataRestored,
   });
 
   final StorageService storage;
@@ -44,6 +45,7 @@ class AssetManagementTab extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final VoidCallback onPremiumChanged;
   final VoidCallback onProfileTap;
+  final VoidCallback? onDataRestored;
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +131,7 @@ class AssetManagementTab extends StatelessWidget {
                           HeaderActionButtons(
                             storage: storage,
                             onNotificationChanged: () {},
+                            onDataRestored: onDataRestored,
                           ),
                         ],
                       ),

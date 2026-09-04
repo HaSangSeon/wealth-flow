@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -230,6 +231,43 @@ class SimulationSettings {
       );
 }
 
+/// 연금 및 절세 계산기 설정
+class PensionTaxSettings {
+  bool incomeUnder55;
+  double annualContributionPension;
+  double annualContributionIRP;
+  double isaMaturityAmount;
+  double targetPensionTotal;
+  int payoutYears;
+
+  PensionTaxSettings({
+    this.incomeUnder55 = true,
+    this.annualContributionPension = 6000000.0,
+    this.annualContributionIRP = 3000000.0,
+    this.isaMaturityAmount = 30000000.0,
+    this.targetPensionTotal = 300000000.0,
+    this.payoutYears = 20,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'incomeUnder55': incomeUnder55,
+    'annualContributionPension': annualContributionPension,
+    'annualContributionIRP': annualContributionIRP,
+    'isaMaturityAmount': isaMaturityAmount,
+    'targetPensionTotal': targetPensionTotal,
+    'payoutYears': payoutYears,
+  };
+
+  factory PensionTaxSettings.fromJson(Map<String, dynamic> json) => PensionTaxSettings(
+    incomeUnder55: json['incomeUnder55'] as bool? ?? true,
+    annualContributionPension: (json['annualContributionPension'] as num?)?.toDouble() ?? 6000000.0,
+    annualContributionIRP: (json['annualContributionIRP'] as num?)?.toDouble() ?? 3000000.0,
+    isaMaturityAmount: (json['isaMaturityAmount'] as num?)?.toDouble() ?? 30000000.0,
+    targetPensionTotal: (json['targetPensionTotal'] as num?)?.toDouble() ?? 300000000.0,
+    payoutYears: json['payoutYears'] as int? ?? 20,
+  );
+}
+
 /// 시뮬레이션 차트 데이터 포인트
 class ProjectionPoint {
   const ProjectionPoint({
@@ -243,6 +281,80 @@ class ProjectionPoint {
   final double total;
   final double contribution;
   final double cumulativeContribution;
+}
+
+/// 월 적립식 복리 계산을 수행하여 연도별 자산 추이를 산출하는 표준 금융 함수
+List<ProjectionPoint> calculateProjectionPoints({
+  required double initialAsset,
+  required double monthlyContribution,
+  required double annualReturnPercent,
+  required double contributionGrowthPercent,
+  required int years,
+}) {
+  var total = initialAsset;
+  var monthly = monthlyContribution;
+  var cumulativeContrib = 0.0;
+  final points = <ProjectionPoint>[
+    ProjectionPoint(
+      year: 0,
+      total: total,
+      contribution: 0,
+      cumulativeContribution: 0,
+    ),
+  ];
+
+  final r = annualReturnPercent / 100.0;
+  // 월 실효 수익률 rm = (1 + r)^(1/12) - 1
+  // 음수 수익률 대비: 1 + r > 0 인 경우 거듭제곱 사용, 아닐 경우 r / 12
+  final monthlyRate = (1.0 + r > 0)
+      ? (math.pow(1.0 + r, 1.0 / 12.0).toDouble() - 1.0)
+      : (r / 12.0);
+
+  for (var year = 1; year <= years; year++) {
+    final annualContribution = monthly * 12.0;
+    cumulativeContrib += annualContribution;
+
+    if (annualReturnPercent == 0) {
+      total += annualContribution;
+    } else {
+      // 12개월 동안 매월 초 적립 + 월복리 운용
+      for (var m = 0; m < 12; m++) {
+        total = (total + monthly) * (1.0 + monthlyRate);
+      }
+    }
+
+    points.add(
+      ProjectionPoint(
+        year: year,
+        total: total,
+        contribution: annualContribution,
+        cumulativeContribution: cumulativeContrib,
+      ),
+    );
+
+    monthly *= (1.0 + contributionGrowthPercent / 100.0);
+  }
+
+  return points;
+}
+
+/// N년 후 최종 미래 자산 단일값 계산 (은퇴·목표 플래너 및 AI 조언 역산용)
+double calculateCompoundFutureValue({
+  required double initialAsset,
+  required double monthlyContribution,
+  required double annualReturnPercent,
+  required double contributionGrowthPercent,
+  required int years,
+}) {
+  if (years <= 0) return initialAsset;
+  final points = calculateProjectionPoints(
+    initialAsset: initialAsset,
+    monthlyContribution: monthlyContribution,
+    annualReturnPercent: annualReturnPercent,
+    contributionGrowthPercent: contributionGrowthPercent,
+    years: years,
+  );
+  return points.last.total;
 }
 
 /// 프로필 (가족 계좌 분리)
@@ -265,6 +377,7 @@ class Profile {
 class StorageService {
   static const _holdingsKey = 'holdings';
   static const _settingsKey = 'simulation_settings';
+  static const _pensionSettingsKey = 'pension_tax_settings';
   static const _onboardingKey = 'onboarding_complete';
   static const _lastSyncedKey = 'last_synced_at';
   static const _displayUsdKey = 'display_usd';
@@ -311,6 +424,7 @@ class StorageService {
 
   String get _currentHoldingsKey => activeProfileId == 'default' ? _holdingsKey : '${_holdingsKey}_$activeProfileId';
   String get _currentSettingsKey => activeProfileId == 'default' ? _settingsKey : '${_settingsKey}_$activeProfileId';
+  String get _currentPensionSettingsKey => activeProfileId == 'default' ? _pensionSettingsKey : '${_pensionSettingsKey}_$activeProfileId';
 
   /// 모든 프로필의 총 자산 개수 조회 (프리미엄 제한용)
   int getTotalHoldingsCount() {
@@ -362,6 +476,23 @@ class StorageService {
       return SimulationSettings.fromJson(json);
     } catch (_) {
       return SimulationSettings();
+    }
+  }
+
+  /// 연금 및 절세 설정 저장
+  void savePensionSettings(PensionTaxSettings settings) {
+    _box.put(_currentPensionSettingsKey, jsonEncode(settings.toJson()));
+  }
+
+  /// 연금 및 절세 설정 로드
+  PensionTaxSettings loadPensionSettings() {
+    final raw = _box.get(_currentPensionSettingsKey);
+    if (raw == null) return PensionTaxSettings();
+    try {
+      final json = jsonDecode(raw as String) as Map<String, dynamic>;
+      return PensionTaxSettings.fromJson(json);
+    } catch (_) {
+      return PensionTaxSettings();
     }
   }
 
@@ -419,4 +550,101 @@ class StorageService {
   double get stockAlertThreshold => (_box.get(_stockAlertThresholdKey, defaultValue: 5.0) as num).toDouble();
 
   set stockAlertThreshold(double value) => _box.put(_stockAlertThresholdKey, value);
+
+  /// 특정 종목에 오늘 이미 알림을 보냈는지 확인 (종목당 하루 1회 제한)
+  bool isAlertSentToday(String symbol, String dateStr) {
+    final key = 'alert_sent_${symbol}_$dateStr';
+    return _box.get(key, defaultValue: false) as bool;
+  }
+
+  /// 특정 종목에 오늘 알림을 보냈음을 기록
+  Future<void> markAlertSent(String symbol, String dateStr) async {
+    final key = 'alert_sent_${symbol}_$dateStr';
+    await _box.put(key, true);
+  }
+
+  /// 전체 자산 및 설정 데이터를 JSON 문자열로 백업 생성
+  String exportBackupJson() {
+    final Map<String, dynamic> backupData = {
+      'app': 'WealthFlow',
+      'version': 1,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'profiles': profiles.map((p) => p.toJson()).toList(),
+      'activeProfileId': activeProfileId,
+      'profileData': <String, dynamic>{},
+    };
+
+    final profileDataMap = <String, dynamic>{};
+    for (var profile in profiles) {
+      final hKey = profile.id == 'default' ? _holdingsKey : '${_holdingsKey}_${profile.id}';
+      final sKey = profile.id == 'default' ? _settingsKey : '${_settingsKey}_${profile.id}';
+      final pKey = profile.id == 'default' ? _pensionSettingsKey : '${_pensionSettingsKey}_${profile.id}';
+
+      final holdingsRaw = _box.get(hKey);
+      final settingsRaw = _box.get(sKey);
+      final pensionRaw = _box.get(pKey);
+
+      profileDataMap[profile.id] = {
+        'holdings': holdingsRaw != null ? jsonDecode(holdingsRaw as String) : [],
+        'simulationSettings': settingsRaw != null ? jsonDecode(settingsRaw as String) : null,
+        'pensionSettings': pensionRaw != null ? jsonDecode(pensionRaw as String) : null,
+      };
+    }
+    backupData['profileData'] = profileDataMap;
+
+    return const JsonEncoder.withIndent('  ').convert(backupData);
+  }
+
+  /// 백업 JSON 문자열을 검증하고 복원
+  bool importBackupJson(String jsonStr) {
+    try {
+      final dynamic decoded = jsonDecode(jsonStr);
+      if (decoded is! Map<String, dynamic>) return false;
+      if (decoded['app'] != 'WealthFlow' && !decoded.containsKey('profileData') && !decoded.containsKey('holdings')) {
+        return false;
+      }
+
+      // 1. 프로필 목록 복원
+      if (decoded.containsKey('profiles') && decoded['profiles'] is List) {
+        final profileList = (decoded['profiles'] as List)
+            .map((item) => Profile.fromJson(item as Map<String, dynamic>))
+            .toList();
+        if (profileList.isNotEmpty) {
+          saveProfiles(profileList);
+        }
+      }
+
+      if (decoded.containsKey('activeProfileId') && decoded['activeProfileId'] is String) {
+        activeProfileId = decoded['activeProfileId'] as String;
+      }
+
+      // 2. 프로필별 데이터 복원
+      if (decoded.containsKey('profileData') && decoded['profileData'] is Map) {
+        final profileData = decoded['profileData'] as Map<String, dynamic>;
+        profileData.forEach((profileId, data) {
+          if (data is Map<String, dynamic>) {
+            final hKey = profileId == 'default' ? _holdingsKey : '${_holdingsKey}_$profileId';
+            final sKey = profileId == 'default' ? _settingsKey : '${_settingsKey}_$profileId';
+            final pKey = profileId == 'default' ? _pensionSettingsKey : '${_pensionSettingsKey}_$profileId';
+
+            if (data['holdings'] != null) {
+              _box.put(hKey, jsonEncode(data['holdings']));
+            }
+            if (data['simulationSettings'] != null) {
+              _box.put(sKey, jsonEncode(data['simulationSettings']));
+            }
+            if (data['pensionSettings'] != null) {
+              _box.put(pKey, jsonEncode(data['pensionSettings']));
+            }
+          }
+        });
+      } else if (decoded.containsKey('holdings')) {
+        _box.put(_currentHoldingsKey, jsonEncode(decoded['holdings']));
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

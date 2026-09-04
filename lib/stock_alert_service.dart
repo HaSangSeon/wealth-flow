@@ -138,10 +138,18 @@ class StockAlertService {
     } catch (_) {}
 
     int alertsSent = 0;
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
     for (final holding in holdings) {
       final symbol = holding.symbol?.trim();
       if (symbol == null || symbol.isEmpty) continue;
+
+      // ⚠️ 종목당 하루 1회 제한: 오늘 이미 알림을 보낸 종목은 스팸 방지를 위해 건너뜁니다
+      if (storage.isAlertSentToday(symbol, todayStr)) {
+        continue;
+      }
 
       try {
         final quote = await yahoo.fetchStockQuote(symbol);
@@ -161,6 +169,7 @@ class StockAlertService {
             quote: quote,
             impactAmount: impactAmount,
           );
+          await storage.markAlertSent(symbol, todayStr);
           alertsSent++;
         }
       } catch (e) {
@@ -222,19 +231,28 @@ class StockAlertService {
   /// 사용자가 설정 화면 등에서 직접 눌러볼 수 있는 테스트 알림 발송
   static Future<bool> sendTestNotification({
     required StorageService storage,
-    bool isSurge = false,
+    bool isSurge = true,
   }) async {
-    final holdings = storage.loadHoldings();
-    if (holdings.isEmpty) {
-      return false; // 등록된 자산이 없음
+    if (!_isInitialized) {
+      await initialize(storage);
     }
 
-    final sampleHolding = holdings.first;
+    final holdings = storage.loadHoldings();
+    final sampleHolding = holdings.isNotEmpty
+        ? holdings.first
+        : Holding(
+            name: '삼성전자',
+            symbol: '005930.KS',
+            type: AssetType.koreanStock,
+            account: AccountType.general,
+            quantity: 50,
+            price: 75000,
+          );
 
     final testPercent = isSurge ? 6.8 : -5.4;
     final testChangeAmount = isSurge ? (sampleHolding.price * 0.068) : -(sampleHolding.price * 0.054);
     final quote = StockQuote(
-      symbol: sampleHolding.symbol ?? 'TEST',
+      symbol: sampleHolding.symbol ?? '005930.KS',
       price: sampleHolding.price,
       changePercent: testPercent,
       changeAmount: testChangeAmount,

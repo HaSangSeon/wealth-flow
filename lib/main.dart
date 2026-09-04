@@ -27,6 +27,7 @@ import 'profile_sheet.dart';
 import 'portfolio_allocation_card.dart';
 import 'portfolio_news_carousel.dart';
 
+import 'stock_alert_service.dart';
 import 'common_widgets.dart';
 
 // ─── 앱 진입점 ────────────────────────────────────────────
@@ -41,8 +42,9 @@ Future<void> main() async {
   try {
     await PaymentService.initialize(storage);
     await AdService.initialize();
+    await StockAlertService.initialize(storage);
   } catch (e) {
-    debugPrint("Failed to initialize PaymentService or AdService: $e");
+    debugPrint("Failed to initialize services: $e");
   }
   
   themeNotifier = ValueNotifier<ThemeMode>(
@@ -533,36 +535,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
   double get _currentValue =>
       _holdings.fold(0, (previous, holding) => previous + holding.value);
 
-  List<ProjectionPoint> get _projection {
-    var total = _currentValue;
-    var monthly = _settings.monthlyContribution;
-    var cumulativeContrib = 0.0;
-    final points = <ProjectionPoint>[
-      ProjectionPoint(
-          year: 0,
-          total: total,
-          contribution: 0,
-          cumulativeContribution: 0),
-    ];
-
-    for (var year = 1; year <= _settings.years; year++) {
-      final annualContribution = monthly * 12;
-      cumulativeContrib += annualContribution;
-      total =
-          (total + annualContribution) * (1 + _settings.annualReturn / 100);
-      points.add(
-        ProjectionPoint(
-          year: year,
-          total: total,
-          contribution: annualContribution,
-          cumulativeContribution: cumulativeContrib,
-        ),
+  List<ProjectionPoint> get _projection => calculateProjectionPoints(
+        initialAsset: _currentValue,
+        monthlyContribution: _settings.monthlyContribution,
+        annualReturnPercent: _settings.annualReturn,
+        contributionGrowthPercent: _settings.contributionGrowth,
+        years: _settings.years,
       );
-      monthly *= 1 + _settings.contributionGrowth / 100;
-    }
-
-    return points;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -594,10 +573,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                 onRefresh: _syncPrices,
                 onPremiumChanged: () => setState(() {}),
                 onProfileTap: _openProfileSelectionSheet,
+                onDataRestored: _loadDataForProfile,
               ),
               PensionTaxTab(
                 holdings: _holdings,
                 storage: widget.storage,
+                onDataRestored: _loadDataForProfile,
               ),
               SimulationTab(
                 storage: widget.storage,
@@ -635,11 +616,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                   _settings.targetYears = v;
                   _saveAll();
                 }),
+                onDataRestored: _loadDataForProfile,
               ),
               DividendTab(
                 storage: widget.storage,
                 holdings: _holdings,
                 onPremiumChanged: () => setState(() {}),
+                onDataRestored: _loadDataForProfile,
               ),
             ],
           ),
@@ -874,6 +857,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
           price: holding.price,
           originalPrice: holding.originalPrice,
           currency: holding.currency,
+          dividends: holding.dividends ?? existing.dividends,
         );
         setState(() => _holdings[existingIndex] = updated);
         message = "'${holding.name}' 자산이 기존 수량에 합산되었습니다.";
@@ -893,6 +877,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             duration: const Duration(seconds: 2),
           ),
         );
+        // 바텀시트가 닫힌 직후 자연스러운 작업 완료 시점에 전면광고 노출 (3분 쿨다운 적용)
+        Future.delayed(const Duration(milliseconds: 300), () {
+          AdService.showInterstitialAd();
+        });
       }
     }
   }
@@ -923,6 +911,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             duration: const Duration(seconds: 2),
           ),
         );
+        // 바텀시트가 닫힌 직후 자연스러운 작업 완료 시점에 전면광고 노출 (3분 쿨다운 적용)
+        Future.delayed(const Duration(milliseconds: 300), () {
+          AdService.showInterstitialAd();
+        });
       }
     }
   }
@@ -930,32 +922,206 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
   void _confirmDelete(Holding holding) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('자산 삭제'),
-        content: Text("'${holding.name}' 자산을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('취소'),
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Dialog(
+          backgroundColor: isDark ? const Color(0xFF202020) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(
+              color: isDark ? const Color(0xFF333333) : const Color(0xFFEAE5DC),
+              width: 1,
+            ),
           ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() => _holdings = List.from(_holdings)..remove(holding));
-              _saveAll();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("'${holding.name}' 자산이 삭제되었습니다."),
-                  behavior: SnackBarBehavior.floating,
-                  duration: const Duration(seconds: 2),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 경고 아이콘
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: isDark ? 0.15 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Color(0xFFEF4444),
+                    size: 28,
+                  ),
                 ),
-              );
-            },
-            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('삭제'),
+                const SizedBox(height: 16),
+                Text(
+                  '자산 삭제',
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '선택하신 자산을 목록에서 영구히 삭제할까요?',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                // 대상 자산 요약 카드
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF282828) : const Color(0xFFF7F5F0),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF383838) : const Color(0xFFE5DFD5),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF333333) : const Color(0xFFEBE6DD),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          holding.type == AssetType.cash
+                              ? Icons.attach_money_rounded
+                              : Icons.show_chart_rounded,
+                          size: 20,
+                          color: const Color(0xFF176B5B),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              holding.name,
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${holding.account.label} · ${holding.type == AssetType.cash ? '₩${formatNumber(holding.quantity)}' : '${formatNumber(holding.quantity)}주'}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: isDark ? Colors.grey[400] : const Color(0xFF8A8275),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 13,
+                      color: isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '삭제된 자산 데이터는 복구할 수 없습니다.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                // 취소 / 삭제 액션 버튼
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: isDark ? const Color(0xFF444444) : const Color(0xFFDDD8CE),
+                              width: 1,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            foregroundColor: isDark ? Colors.grey[300] : const Color(0xFF4A443D),
+                          ),
+                          child: const Text(
+                            '취소',
+                            style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            setState(() => _holdings = List.from(_holdings)..remove(holding));
+                            _saveAll();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("'${holding.name}' 자산이 삭제되었습니다."),
+                                backgroundColor: const Color(0xFFE53935),
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFEF4444),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text(
+                            '삭제하기',
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

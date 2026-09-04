@@ -23,6 +23,7 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
   AccountType? _account;
   String? _currency;
   double? _originalPrice;
+  List<Map<String, dynamic>>? _dividends;
 
   final ValueNotifier<bool> _isLoadingPrice = ValueNotifier(false);
   final ValueNotifier<List<YahooFinanceSearchResult>> _searchResults =
@@ -50,6 +51,7 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
     _account = widget.initialHolding?.account ?? AccountType.general;
     _currency = widget.initialHolding?.currency;
     _originalPrice = widget.initialHolding?.originalPrice;
+    _dividends = widget.initialHolding?.dividends;
 
     _searchFocusNode = FocusNode();
     _searchFocusNode.addListener(_onSearchFocusChanged);
@@ -91,6 +93,7 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
         _priceController.text = '1';
         _currency = null;
         _originalPrice = null;
+        _dividends = null;
       });
       return;
     }
@@ -141,6 +144,11 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
             _priceController.text = formatNumber(price);
             _currency = currency;
             _originalPrice = (details['price'] as num).toDouble();
+            if (details['dividends'] != null) {
+              _dividends = (details['dividends'] as List<dynamic>)
+                  .map((d) => Map<String, dynamic>.from(d as Map))
+                  .toList();
+            }
 
             if (currency == 'KRW') {
               _type =
@@ -758,6 +766,7 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
         price: price,
         originalPrice: _originalPrice,
         currency: _currency,
+        dividends: _dividends ?? widget.initialHolding?.dividends,
       ),
     );
   }

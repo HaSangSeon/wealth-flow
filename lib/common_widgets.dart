@@ -1,5 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'models.dart';
+import 'stock_alert_service.dart';
 import 'portfolio_news_carousel.dart';
 
 late final ValueNotifier<ThemeMode> themeNotifier;
@@ -21,8 +26,13 @@ void toggleTheme(BuildContext context, StorageService storage) {
   storage.themeMode = nextMode.index;
 }
 
-// ─── 알림 설정 바텀시트 헬퍼 ──────────────────────────────
-void openNotificationSettingsSheet(BuildContext context, StorageService storage, [VoidCallback? onNotificationChanged]) {
+// ─── 통합 설정 (알림 + 데이터 백업/복원) 바텀시트 헬퍼 ──────────────────
+void openSettingsSheet(
+  BuildContext context,
+  StorageService storage, {
+  VoidCallback? onNotificationChanged,
+  VoidCallback? onDataRestored,
+}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -72,14 +82,14 @@ void openNotificationSettingsSheet(BuildContext context, StorageService storage,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      Icons.notifications_active_rounded,
+                      Icons.tune_rounded,
                       color: primaryColor,
                       size: 20,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '알림 설정',
+                    '설정 및 데이터 관리',
                     style: TextStyle(
                       fontSize: 19,
                       fontWeight: FontWeight.w800,
@@ -100,7 +110,7 @@ void openNotificationSettingsSheet(BuildContext context, StorageService storage,
               ),
               const SizedBox(height: 18),
 
-              // ── 메인 스위치 카드 ──
+              // ── 1. 자산 데이터 백업 & 복원 섹션 (영구 보관) ──
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -111,117 +121,367 @@ void openNotificationSettingsSheet(BuildContext context, StorageService storage,
                     width: 0.8,
                   ),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                '종목 급등/급락 변동 알림',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                                  letterSpacing: -0.3,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: isEnabled
-                                      ? (isDark ? const Color(0xFF1E3A33) : const Color(0xFFE8F5F1))
-                                      : (isDark ? const Color(0xFF333333) : const Color(0xFFECE7DF)),
-                                  borderRadius: BorderRadius.circular(5),
-                                ),
-                                child: Text(
-                                  isEnabled ? 'ON' : 'OFF',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: isEnabled ? primaryColor : (isDark ? Colors.grey[400] : const Color(0xFF8C847A)),
-                                  ),
-                                ),
-                              ),
-                            ],
+                    Row(
+                      children: [
+                        Icon(Icons.shield_outlined, size: 18, color: primaryColor),
+                        const SizedBox(width: 6),
+                        Text(
+                          '자산 데이터 영구 보관',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '보유 중인 종목의 주요 가격 변동 및 시세 소식을 실시간 푸시로 받습니다.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
-                              height: 1.35,
-                            ),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '폰을 교체하거나 앱을 재설치할 때를 대비해 카카오톡(나에게 보내기)이나 구글 드라이브에 안전하게 백업하세요.\n(⚠️ 복원 시 현재 앱의 기존 자산 데이터는 완전히 삭제되고 백업 파일로 덮어씌워집니다)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                        height: 1.4,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Switch.adaptive(
-                      value: isEnabled,
-                      activeTrackColor: primaryColor,
-                      onChanged: (val) {
-                        setSheetState(() => storage.stockAlertEnabled = val);
-                        onNotificationChanged?.call();
-                      },
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        // 백업 내보내기 버튼
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final jsonStr = storage.exportBackupJson();
+                                final tempDir = await getTemporaryDirectory();
+                                final now = DateTime.now();
+                                final dateStr =
+                                    "${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}";
+                                final file = File('${tempDir.path}/wealthflow_backup_$dateStr.json');
+                                await file.writeAsString(jsonStr);
+
+                                final xFile = XFile(file.path, mimeType: 'application/json');
+                                await SharePlus.instance.share(
+                                  ShareParams(
+                                    files: [xFile],
+                                    subject: '웰스플로우 자산 데이터 백업 ($dateStr)',
+                                    text: '웰스플로우 자산 백업 파일입니다. (카카오톡 나에게 보내기 또는 드라이브에 보관하세요)',
+                                  ),
+                                );
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('백업 파일 생성 실패: $e'),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.upload_file_rounded, size: 17),
+                            label: const Text('백업하기'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: primaryColor,
+                              side: BorderSide(color: primaryColor.withValues(alpha: 0.5)),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // 복원 불러오기 버튼
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () async {
+                              try {
+                                final result = await FilePicker.pickFile(
+                                  type: FileType.any,
+                                );
+                                if (result != null) {
+                                  final content = await result.xFile.readAsString();
+                                  if (content.trim().isEmpty) return;
+
+                                  if (!context.mounted) return;
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      title: const Row(
+                                        children: [
+                                          Icon(Icons.warning_amber_rounded, color: Color(0xFFD32F2F), size: 24),
+                                          SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              '데이터 완전 덮어쓰기 안내',
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFD32F2F).withValues(alpha: 0.08),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: const Color(0xFFD32F2F).withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: const Row(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Icon(Icons.error_outline_rounded, color: Color(0xFFD32F2F), size: 18),
+                                                SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    '현재 앱에 등록된 모든 기존 자산 및 설정 데이터가 완전히 삭제되고, 백업 파일의 데이터로 대체됩니다.',
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: Color(0xFFD32F2F),
+                                                      height: 1.4,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 14),
+                                          const Text(
+                                            '• 복원 후에는 이전 데이터를 되돌릴 수 없습니다.\n• 백업 시점의 자산과 설정으로 100% 교체됩니다.\n\n정말 복원을 진행하시겠습니까?',
+                                            style: TextStyle(fontSize: 13, height: 1.5),
+                                          ),
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false),
+                                          child: const Text('취소'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor: const Color(0xFFD32F2F),
+                                          ),
+                                          child: const Text('완전 덮어쓰기 복원'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (confirm == true) {
+                                    final success = storage.importBackupJson(content);
+                                    if (!context.mounted) return;
+                                    if (success) {
+                                      Navigator.pop(context); // 바텀시트 닫기
+                                      onDataRestored?.call();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('🎉 자산 데이터가 완벽하게 복원되었습니다!'),
+                                          backgroundColor: Color(0xFF176B5B),
+                                          behavior: SnackBarBehavior.floating,
+                                          duration: Duration(seconds: 3),
+                                        ),
+                                      );
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('올바른 웰스플로우 백업 파일이 아닙니다.'),
+                                          backgroundColor: Colors.redAccent,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('파일 불러오기 실패: $e'),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.download_rounded, size: 17),
+                            label: const Text('복원하기'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 14),
 
-              // ── 안내 가이드 리스트 ──
+              // ── 2. 메인 시세 알림 스위치 카드 ──
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF5F3EE),
-                  borderRadius: BorderRadius.circular(12),
+                  color: isDark ? const Color(0xFF242424) : const Color(0xFFF9F7F3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
+                    width: 0.8,
+                  ),
                 ),
                 child: Column(
                   children: [
-                    _buildInfoRow(
-                      context,
-                      icon: Icons.bolt_rounded,
-                      text: '등록된 보유 종목에 맞춤화된 주요 시세 변동을 감지합니다.',
-                      isDark: isDark,
-                      primaryColor: primaryColor,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    '보유 종목 급등/급락 알림',
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: isEnabled
+                                          ? (isDark ? const Color(0xFF1E3A33) : const Color(0xFFE8F5F1))
+                                          : (isDark ? const Color(0xFF333333) : const Color(0xFFECE7DF)),
+                                      borderRadius: BorderRadius.circular(5),
+                                    ),
+                                    child: Text(
+                                      isEnabled ? 'ON' : 'OFF',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: isEnabled ? primaryColor : (isDark ? Colors.grey[400] : const Color(0xFF8C847A)),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '보유 중인 종목의 5% 이상 가격 변동 소식을 종목당 하루 1회 푸시로 받습니다.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Switch.adaptive(
+                          value: isEnabled,
+                          activeTrackColor: primaryColor,
+                          onChanged: (val) async {
+                            setSheetState(() => storage.stockAlertEnabled = val);
+                            if (val) {
+                              await StockAlertService.schedulePeriodicAlertTask();
+                            } else {
+                              await StockAlertService.cancelPeriodicAlertTask();
+                            }
+                            onNotificationChanged?.call();
+                          },
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    _buildInfoRow(
-                      context,
-                      icon: Icons.battery_charging_full_rounded,
-                      text: '배터리 소모를 최소화한 효율적인 스마트 백그라운드 방식을 사용합니다.',
-                      isDark: isDark,
-                      primaryColor: primaryColor,
+                    const SizedBox(height: 12),
+                    Divider(
+                      height: 1,
+                      color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '푸시 알림 수신 여부 즉시 확인',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                            ),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final sent = await StockAlertService.sendTestNotification(storage: storage);
+                            if (context.mounted && sent) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('🔔 테스트 알림이 발송되었습니다! 상단 알림바를 확인해보세요.'),
+                                  backgroundColor: Color(0xFF176B5B),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.notifications_active_outlined, size: 15),
+                          label: const Text('테스트 알림'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: primaryColor,
+                            side: BorderSide(color: primaryColor.withValues(alpha: 0.4)),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
 
-              // ── 확인 완료 버튼 ──
+              // ── 닫기 버튼 ──
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: FilledButton(
                   onPressed: () => Navigator.pop(context),
                   style: FilledButton.styleFrom(
-                    backgroundColor: primaryColor,
+                    backgroundColor: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE8E4DC),
+                    foregroundColor: isDark ? Colors.white : const Color(0xFF2C2A28),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     elevation: 0,
                   ),
                   child: const Text(
-                    '확인',
+                    '닫기',
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -234,36 +494,23 @@ void openNotificationSettingsSheet(BuildContext context, StorageService storage,
   );
 }
 
-Widget _buildInfoRow(BuildContext context, {required IconData icon, required String text, required bool isDark, required Color primaryColor}) {
-  return Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Icon(icon, size: 15, color: primaryColor),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 11.5,
-            color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
-            height: 1.35,
-          ),
-        ),
-      ),
-    ],
-  );
+// 하위 호환용 래퍼
+void openNotificationSettingsSheet(BuildContext context, StorageService storage, [VoidCallback? onNotificationChanged]) {
+  openSettingsSheet(context, storage, onNotificationChanged: onNotificationChanged);
 }
 
-// ─── 공통 헤더 액션 버튼 (알림 + 다크/라이트모드) ─────────────────
+// ─── 공통 헤더 액션 버튼 (설정 + 다크/라이트모드) ─────────────────
 class HeaderActionButtons extends StatelessWidget {
   const HeaderActionButtons({
     super.key,
     required this.storage,
     this.onNotificationChanged,
+    this.onDataRestored,
   });
 
   final StorageService storage;
   final VoidCallback? onNotificationChanged;
+  final VoidCallback? onDataRestored;
 
   @override
   Widget build(BuildContext context) {
@@ -295,17 +542,18 @@ class HeaderActionButtons extends StatelessWidget {
             padding: EdgeInsets.zero,
             iconSize: 19,
             onPressed: () {
-              openNotificationSettingsSheet(context, storage, onNotificationChanged);
+              openSettingsSheet(
+                context,
+                storage,
+                onNotificationChanged: onNotificationChanged,
+                onDataRestored: onDataRestored,
+              );
             },
             icon: Icon(
-              storage.stockAlertEnabled
-                  ? Icons.notifications_active_outlined
-                  : Icons.notifications_off_outlined,
-              color: storage.stockAlertEnabled
-                  ? primaryColor
-                  : (isDark ? Colors.grey[400] : const Color(0xFF8C847A)),
+              Icons.tune_rounded,
+              color: primaryColor,
             ),
-            tooltip: '급등/급락 알림 설정',
+            tooltip: '설정 및 데이터 백업',
           ),
         ),
         const SizedBox(width: 8),

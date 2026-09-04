@@ -19,11 +19,13 @@ class DividendTab extends StatefulWidget {
     required this.storage,
     required this.holdings,
     required this.onPremiumChanged,
+    this.onDataRestored,
   });
 
   final StorageService storage;
   final List<Holding> holdings;
   final VoidCallback onPremiumChanged;
+  final VoidCallback? onDataRestored;
 
   @override
   State<DividendTab> createState() => _DividendTabState();
@@ -181,6 +183,7 @@ class _DividendTabState extends State<DividendTab> {
                   HeaderActionButtons(
                     storage: widget.storage,
                     onNotificationChanged: widget.onPremiumChanged,
+                    onDataRestored: widget.onDataRestored,
                   ),
                 ],
               ),
@@ -236,7 +239,7 @@ class _DividendTabState extends State<DividendTab> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    '본 배당 정보는 야후 파이낸스(Yahoo Finance)의 과거 1년간(TTM) 지급 내역을 바탕으로 산출된 예상 금액입니다. 신생 ETF나 최신 특별배당의 경우 실제 내역과 차이가 있거나 누락될 수 있습니다.',
+                                    '본 배당 정보는 금융 공시 데이터 기반의 실지급 및 예상 일정입니다. 종목별 주총/운용사 공시 및 영업일에 따라 실제 입금일과 1~2일 차이가 있을 수 있으며, 연금저축/IRP 계좌는 세법상 배당소득세(15.4%)가 과세이연(비과세) 반영됩니다.',
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: isDark ? Colors.grey[400] : Colors.grey[600],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'models.dart';
 
 class GoalPlannerView extends StatelessWidget {
   const GoalPlannerView({
@@ -43,19 +44,21 @@ class GoalPlannerView extends StatelessWidget {
   }
 
   double _calculateFutureValue(double start, double monthly, double rate, double growth, int yearsCount) {
-    double total = start;
-    double monthlyContrib = monthly;
-    for (var year = 1; year <= yearsCount; year++) {
-      final annualContribution = monthlyContrib * 12;
-      total = (total + annualContribution) * (1 + rate / 100);
-      monthlyContrib *= 1 + growth / 100;
-    }
-    return total;
+    return calculateCompoundFutureValue(
+      initialAsset: start,
+      monthlyContribution: monthly,
+      annualReturnPercent: rate,
+      contributionGrowthPercent: growth,
+      years: yearsCount,
+    );
   }
 
   double _calculateRequiredMonthlyContribution(int remainingYears) {
-    double low = monthlyContribution;
-    double high = monthlyContribution + (targetAmount / 12);
+    double low = 0.0;
+    double high = (targetAmount / (remainingYears * 12).clamp(1, 1200)) * 2.5;
+    if (high < monthlyContribution * 2) {
+      high = monthlyContribution * 2;
+    }
     for (int i = 0; i < 50; i++) {
       double mid = (low + high) / 2;
       double fv = _calculateFutureValue(currentValue, mid, annualReturn, contributionGrowth, remainingYears);

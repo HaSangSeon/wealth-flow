@@ -9,10 +9,12 @@ class PensionTaxTab extends StatefulWidget {
     super.key,
     required this.holdings,
     required this.storage,
+    this.onDataRestored,
   });
 
   final List<Holding> holdings;
   final StorageService storage;
+  final VoidCallback? onDataRestored;
 
   @override
   State<PensionTaxTab> createState() => _PensionTaxTabState();
@@ -30,6 +32,34 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
   // 연금 수령 전략 상태
   double _targetPensionTotal = 300000000;
   int _payoutYears = 20;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedSettings();
+  }
+
+  void _loadSavedSettings() {
+    final settings = widget.storage.loadPensionSettings();
+    _incomeUnder55 = settings.incomeUnder55;
+    _annualContributionPension = settings.annualContributionPension;
+    _annualContributionIRP = settings.annualContributionIRP;
+    _isaMaturityAmount = settings.isaMaturityAmount;
+    _targetPensionTotal = settings.targetPensionTotal;
+    _payoutYears = settings.payoutYears;
+  }
+
+  void _saveSettings() {
+    final settings = PensionTaxSettings(
+      incomeUnder55: _incomeUnder55,
+      annualContributionPension: _annualContributionPension,
+      annualContributionIRP: _annualContributionIRP,
+      isaMaturityAmount: _isaMaturityAmount,
+      targetPensionTotal: _targetPensionTotal,
+      payoutYears: _payoutYears,
+    );
+    widget.storage.savePensionSettings(settings);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,11 +93,13 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
     // 3. ISA 만기 전환 혜택 계산
     final isaRolloverCredit = (_isaMaturityAmount * 0.1).clamp(0.0, 3000000.0);
     final isaRolloverRefund = isaRolloverCredit * taxRate;
+    final totalAnnualRefund = calculatedRefund + isaRolloverRefund;
 
-    // 4. 은퇴 연금 수령 계산
+    // 4. 은퇴 연금 수령 계산 (세법상 10년 이상 분할 수령 + 연 1,500만 원 이하 저율과세 요건)
     final annualPayout = _payoutYears > 0 ? _targetPensionTotal / _payoutYears : 0.0;
     final monthlyPayout = annualPayout / 12;
-    final isPayoutSafe = annualPayout <= 15000000;
+    final meetsMinYears = _payoutYears >= 10;
+    final meetsAmountLimit = annualPayout <= 15000000;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -109,7 +141,15 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                             ],
                           ),
                         ),
-                        HeaderActionButtons(storage: widget.storage),
+                        HeaderActionButtons(
+                          storage: widget.storage,
+                          onDataRestored: () {
+                            setState(() {
+                              _loadSavedSettings();
+                            });
+                            widget.onDataRestored?.call();
+                          },
+                        ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -253,7 +293,10 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                                       child: _buildIncomeTab(
                                         isSelected: _incomeUnder55,
                                         label: '5,500만 이하 (16.5%)',
-                                        onTap: () => setState(() => _incomeUnder55 = true),
+                                        onTap: () => setState(() {
+                                          _incomeUnder55 = true;
+                                          _saveSettings();
+                                        }),
                                         isDark: isDark,
                                         primaryColor: primaryColor,
                                       ),
@@ -263,7 +306,10 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                                       child: _buildIncomeTab(
                                         isSelected: !_incomeUnder55,
                                         label: '5,500만 초과 (13.2%)',
-                                        onTap: () => setState(() => _incomeUnder55 = false),
+                                        onTap: () => setState(() {
+                                          _incomeUnder55 = false;
+                                          _saveSettings();
+                                        }),
                                         isDark: isDark,
                                         primaryColor: primaryColor,
                                       ),
@@ -282,7 +328,10 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                             min: 0,
                             max: 18000000,
                             divisions: 180,
-                            onChanged: (v) => setState(() => _annualContributionPension = v),
+                            onChanged: (v) => setState(() {
+                              _annualContributionPension = v;
+                              _saveSettings();
+                            }),
                           ),
                           SliderField(
                             label: '올해 IRP 납입 예정액',
@@ -292,7 +341,10 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                             min: 0,
                             max: 18000000,
                             divisions: 180,
-                            onChanged: (v) => setState(() => _annualContributionIRP = v),
+                            onChanged: (v) => setState(() {
+                              _annualContributionIRP = v;
+                              _saveSettings();
+                            }),
                           ),
                           const SizedBox(height: 12),
                           // 환급금 결과 박스
@@ -330,29 +382,42 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                                 const SizedBox(height: 14),
                                 // 가이드 박스
                                 if (remainingToMaximize > 0)
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: primaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.lightbulb_outline_rounded, color: primaryColor, size: 18),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            '올해 IRP 계좌에 ${formatCurrencyFull(remainingToMaximize)}을 추가 납입하시면 세금 ${formatCurrencyFull(additionalRefundPossible)}을 더 돌려받을 수 있어요!',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: isDark ? const Color(0xFF34D399) : primaryColor,
-                                              height: 1.4,
-                                            ),
-                                          ),
+                                  Builder(
+                                    builder: (context) {
+                                      final pensionRemaining = 6000000.0 - pensionCreditBase;
+                                      String guideMsg;
+                                      if (pensionRemaining > 0 && pensionRemaining < remainingToMaximize) {
+                                        guideMsg = '연금저축(최대 ${formatCurrencyFull(pensionRemaining)}) 또는 IRP 계좌에 총 ${formatCurrencyFull(remainingToMaximize)}을 추가 납입하시면 세금 ${formatCurrencyFull(additionalRefundPossible)}을 더 돌려받을 수 있어요!';
+                                      } else if (pensionRemaining >= remainingToMaximize) {
+                                        guideMsg = '연금저축 또는 IRP 계좌에 ${formatCurrencyFull(remainingToMaximize)}을 추가 납입하시면 세금 ${formatCurrencyFull(additionalRefundPossible)}을 더 돌려받을 수 있어요!';
+                                      } else {
+                                        guideMsg = '올해 IRP 계좌에 ${formatCurrencyFull(remainingToMaximize)}을 추가 납입하시면 세금 ${formatCurrencyFull(additionalRefundPossible)}을 더 돌려받을 수 있어요!';
+                                      }
+                                      return Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: primaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
+                                          borderRadius: BorderRadius.circular(10),
                                         ),
-                                      ],
-                                    ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.lightbulb_outline_rounded, color: primaryColor, size: 18),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                guideMsg,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isDark ? const Color(0xFF34D399) : primaryColor,
+                                                  height: 1.4,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
                                   )
                                 else
                                   Container(
@@ -414,7 +479,10 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                             min: 0,
                             max: 100000000,
                             divisions: 100,
-                            onChanged: (v) => setState(() => _isaMaturityAmount = v),
+                            onChanged: (v) => setState(() {
+                              _isaMaturityAmount = v;
+                              _saveSettings();
+                            }),
                           ),
                           const SizedBox(height: 12),
                           Row(
@@ -435,6 +503,48 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                               ),
                             ],
                           ),
+                          if (isaRolloverCredit > 0) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF262626) : const Color(0xFFF3F0EA),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isDark ? const Color(0xFF383838) : const Color(0xFFE5DFD5),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.auto_awesome_rounded, size: 16, color: Color(0xFFE5A93C)),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '연간 총 환급액 (연금+ISA)',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark ? Colors.grey[300] : const Color(0xFF5E574E),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
+                                    formatCurrencyFull(totalAnnualRefund),
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: isDark ? const Color(0xFF34D399) : primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -451,7 +561,7 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '만 55세 이후 연금 수령 시 사적연금(연금저축+IRP) 연간 수령액이 ₩15,000,000 이하이면 낮은 연금소득세율(3.3% ~ 5.5% 분리과세)만 내고 수령할 수 있습니다.',
+                            '만 55세 이후 연금 수령 시 사적연금(연금저축+IRP) 연간 수령액이 ₩15,000,000 이하이고 10년 이상 분할 수령 시 낮은 연금소득세율(3.3% ~ 5.5% 분리과세)만 내고 수령할 수 있습니다.',
                             style: TextStyle(
                               fontSize: 12.5,
                               color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
@@ -459,15 +569,57 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                             ),
                           ),
                           const SizedBox(height: 18),
+                          if (pensionSum + irpSum > 0) ...[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: InkWell(
+                                onTap: () => setState(() {
+                                  _targetPensionTotal = pensionSum + irpSum;
+                                  _saveSettings();
+                                }),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: primaryColor.withValues(alpha: isDark ? 0.2 : 0.08),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: primaryColor.withValues(alpha: 0.3),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.sync_rounded, size: 13, color: primaryColor),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '내 보유 연금 반영 (${formatCurrencyFull(pensionSum + irpSum)})',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark ? const Color(0xFF34D399) : primaryColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                          ],
                           SliderField(
                             label: '은퇴 시 모인 총 연금 자산',
-                            helpText: '💡 55세 이후 연금 인출 꿀팁\n\n나중에 연금 수령 시 세금 로직은 "꼬리표"에 따라 다릅니다.\n1순위: 세액공제 안 받은 원금 (한도 무관 100% 비과세)\n2순위: 퇴직금 (퇴직소득세)\n3순위: 세액공제 받은 원금 + 수익 (이 3순위만 1,500만 원 한도 체크!)\n\n📌 1,500만 원 한도 오버 시:\n• 1,500만 원 이하: 15년 동안 안 내고 모아둔 \'세금 이연분\'에 대한 정산 요금(3.3~5.5%)만 납부\n• 1,500만 원 초과: 초과분은 내 근로/사업 소득과 합치지 않고, 딱 16.5%만 떼고 깔끔하게 끝나는 \'16.5% 분리과세\'를 선택할 수 있습니다!',
+                            helpText: '💡 55세 이후 연금 인출 꿀팁\n\n• 법정 최소 수령 기간: 세법상 저율 연금소득세(3.3%~5.5%) 혜택을 받으려면 반드시 "최소 10년 이상" 분할 수령해야 합니다.\n• 1,500만 원 한도: 세액공제 받은 원금과 운용수익은 연 1,500만 원 이하 수령 시 저율 연금소득세(3.3%~5.5%)로 종결됩니다.\n• 1,500만 원 초과 시: 초과분은 내 근로/사업 소득과 합산하지 않고, 딱 16.5%만 떼고 끝나는 "16.5% 분리과세"를 선택할 수 있습니다!',
                             valueLabel: formatCurrencyFull(_targetPensionTotal),
                             value: _targetPensionTotal,
                             min: 0,
                             max: 1000000000,
                             divisions: 100,
-                            onChanged: (v) => setState(() => _targetPensionTotal = v),
+                            onChanged: (v) => setState(() {
+                              _targetPensionTotal = v;
+                              _saveSettings();
+                            }),
                           ),
                           SliderField(
                             label: '희망 연금 수령 기간',
@@ -476,7 +628,10 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                             min: 5,
                             max: 30,
                             divisions: 25,
-                            onChanged: (v) => setState(() => _payoutYears = v.round()),
+                            onChanged: (v) => setState(() {
+                              _payoutYears = v.round();
+                              _saveSettings();
+                            }),
                           ),
                           const SizedBox(height: 12),
                           Row(
@@ -498,47 +653,63 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                             ],
                           ),
                           const SizedBox(height: 14),
-                          // 연금 수령 안전도 판정 박스
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: isPayoutSafe
-                                  ? (isDark ? const Color(0xFF1E3A2B) : const Color(0xFFE8F5E9))
-                                  : (isDark ? const Color(0xFF3A281E) : const Color(0xFFFFF3E0)),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isPayoutSafe
-                                    ? (isDark ? const Color(0xFF2E7D32) : const Color(0xFF81C784))
-                                    : (isDark ? const Color(0xFFEF6C00) : const Color(0xFFFFB74D)),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  isPayoutSafe ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
-                                  color: isPayoutSafe ? const Color(0xFF2E7D32) : const Color(0xFFEF6C00),
-                                  size: 20,
+                          // 연금 수령 안전도 판정 박스 (세법 요건 정밀 반영)
+                          Builder(
+                            builder: (context) {
+                              final Color boxBg;
+                              final Color borderColor;
+                              final Color textColor;
+                              final IconData icon;
+                              final String message;
+
+                              if (!meetsMinYears) {
+                                boxBg = isDark ? const Color(0xFF3A281E) : const Color(0xFFFFF3E0);
+                                borderColor = isDark ? const Color(0xFFEF6C00) : const Color(0xFFFFB74D);
+                                textColor = isDark ? const Color(0xFFFFB74D) : const Color(0xFFEF6C00);
+                                icon = Icons.warning_amber_rounded;
+                                message = '법정 최소 분할 수령 기간(10년) 미충족! 10년 미만으로 인출 시 연금수령한도를 초과하여 저율 과세(3.3%~5.5%) 대신 기타소득세(16.5%)가 부과될 수 있습니다.';
+                              } else if (!meetsAmountLimit) {
+                                boxBg = isDark ? const Color(0xFF3A281E) : const Color(0xFFFFF3E0);
+                                borderColor = isDark ? const Color(0xFFEF6C00) : const Color(0xFFFFB74D);
+                                textColor = isDark ? const Color(0xFFFFB74D) : const Color(0xFFEF6C00);
+                                icon = Icons.info_outline_rounded;
+                                message = '연간 수령액이 ₩15,000,000을 초과하여 종합과세 또는 16.5% 분리과세 대상이 될 우려가 있습니다. 수령 기간을 늘려 한도를 조절하는 것을 추천합니다.';
+                              } else {
+                                boxBg = isDark ? const Color(0xFF1E3A2B) : const Color(0xFFE8F5E9);
+                                borderColor = isDark ? const Color(0xFF2E7D32) : const Color(0xFF81C784);
+                                textColor = isDark ? const Color(0xFF81C784) : const Color(0xFF2E7D32);
+                                icon = Icons.check_circle_rounded;
+                                message = '연간 ₩15,000,000 이하 및 10년 이상 분할 수령 요건 만족! 저율 연금소득세(3.3%~5.5%) 혜택 대상입니다.';
+                              }
+
+                              return Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: boxBg,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: borderColor, width: 0.8),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    isPayoutSafe
-                                        ? '연간 ₩15,000,000 이하 수령 조건 만족! 저율 연금소득세(3.3%~5.5%) 혜택 대상입니다.'
-                                        : '연간 수령액이 ₩15,000,000을 초과하여 종합과세 또는 16.5% 분리과세 대상이 될 우려가 있습니다. 수령 기간을 늘려 한도를 조절하는 것을 추천합니다.',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: isPayoutSafe
-                                          ? (isDark ? const Color(0xFF81C784) : const Color(0xFF2E7D32))
-                                          : (isDark ? const Color(0xFFFFB74D) : const Color(0xFFEF6C00)),
-                                      height: 1.4,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(icon, color: textColor, size: 20),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        message,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: textColor,
+                                          height: 1.45,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
                         ],
                       ),

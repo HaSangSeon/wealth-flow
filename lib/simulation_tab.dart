@@ -32,9 +32,11 @@ class SimulationTab extends StatefulWidget {
     required this.onYearsChanged,
     required this.onTargetAmountChanged,
     required this.onTargetYearsChanged,
+    this.onDataRestored,
   });
 
   final StorageService storage;
+  final VoidCallback? onDataRestored;
   final double currentValue;
   final double projectedValue;
   final int years;
@@ -191,7 +193,10 @@ class _SimulationTabState extends State<SimulationTab> {
                             ],
                           ),
                         ),
-                        HeaderActionButtons(storage: widget.storage),
+                        HeaderActionButtons(
+                          storage: widget.storage,
+                          onDataRestored: widget.onDataRestored,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 20),

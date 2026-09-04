@@ -160,6 +160,7 @@ class _DividendCalendarViewState extends State<DividendCalendarView> {
                     if (index % 7 == 6) textColor = Colors.blue;
                     
                     return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: () {
                         widget.onSelectedDayChanged(cellDate);
                       },
@@ -320,12 +321,14 @@ class _DividendCalendarViewState extends State<DividendCalendarView> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF176B5B).withValues(alpha: 0.1),
+                  color: div.isHistorical
+                      ? const Color(0xFF2E7D32).withValues(alpha: 0.12)
+                      : const Color(0xFF176B5B).withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.show_chart,
-                  color: Color(0xFF176B5B),
+                child: Icon(
+                  div.isHistorical ? Icons.check_circle_outline : Icons.show_chart,
+                  color: div.isHistorical ? const Color(0xFF2E7D32) : const Color(0xFF176B5B),
                   size: 20,
                 ),
               ),
@@ -334,23 +337,77 @@ class _DividendCalendarViewState extends State<DividendCalendarView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      div.name,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            div.name,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: div.isHistorical
+                                ? const Color(0xFF2E7D32).withValues(alpha: isDark ? 0.25 : 0.12)
+                                : const Color(0xFFEAA622).withValues(alpha: isDark ? 0.25 : 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            div.isHistorical ? '지급완료' : '지급예정',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.bold,
+                              color: div.isHistorical ? const Color(0xFF2E7D32) : const Color(0xFFC27B00),
+                            ),
+                          ),
+                        ),
+                        if (div.isTaxFree) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: isDark ? 0.25 : 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              '비과세',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      div.symbol,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          div.symbol,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '기준일 ${div.date.month}/${div.date.day}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? Colors.grey[500] : Colors.grey[500],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -360,10 +417,10 @@ class _DividendCalendarViewState extends State<DividendCalendarView> {
                 children: [
                   Text(
                     displayTotal,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF176B5B),
+                      color: div.isHistorical ? const Color(0xFF2E7D32) : const Color(0xFF176B5B),
                     ),
                   ),
                   const SizedBox(height: 2),

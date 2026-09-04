@@ -188,7 +188,9 @@ class DividendPortfolioList extends StatelessWidget {
                     name: div.name,
                     amount: displayAmountPerShare,
                     total: displayTotal,
-                    dateText: '예상 지급: ${div.paymentDate.year}/${div.paymentDate.month}/${div.paymentDate.day} | 배당락: ${div.date.year}/${div.date.month}/${div.date.day}',
+                    dateText: '${div.isHistorical ? "지급완료" : "예상지급"}: ${div.paymentDate.year}/${div.paymentDate.month}/${div.paymentDate.day} | 기준일: ${div.date.month}/${div.date.day}',
+                    isHistorical: div.isHistorical,
+                    isTaxFree: div.isTaxFree,
                   );
                 },
               ),
@@ -205,6 +207,8 @@ class DividendPortfolioList extends StatelessWidget {
     required String amount,
     required String total,
     required String dateText,
+    bool isHistorical = false,
+    bool isTaxFree = false,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -226,15 +230,57 @@ class DividendPortfolioList extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13.5,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: isHistorical
+                            ? const Color(0xFF2E7D32).withValues(alpha: isDark ? 0.25 : 0.12)
+                            : const Color(0xFFEAA622).withValues(alpha: isDark ? 0.25 : 0.15),
+                        borderRadius: BorderRadius.circular(3.5),
+                      ),
+                      child: Text(
+                        isHistorical ? '지급완료' : '지급예정',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: isHistorical ? const Color(0xFF2E7D32) : const Color(0xFFC27B00),
+                        ),
+                      ),
+                    ),
+                    if (isTaxFree) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: isDark ? 0.25 : 0.12),
+                          borderRadius: BorderRadius.circular(3.5),
+                        ),
+                        child: const Text(
+                          '비과세',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -560,26 +606,66 @@ void showDividendDetailsSheet(BuildContext context, StockDividendSummary summary
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      '${div.paymentDate.year}년 ${div.paymentDate.month}월 배당',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14.5,
-                                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                                        letterSpacing: -0.3,
-                                      ),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          '${div.paymentDate.year}년 ${div.paymentDate.month}월 배당',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14.5,
+                                            color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                                            letterSpacing: -0.3,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: div.isHistorical
+                                                ? const Color(0xFF2E7D32).withValues(alpha: isDark ? 0.25 : 0.12)
+                                                : const Color(0xFFEAA622).withValues(alpha: isDark ? 0.25 : 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            div.isHistorical ? '지급완료' : '지급예정',
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: div.isHistorical ? const Color(0xFF2E7D32) : const Color(0xFFC27B00),
+                                            ),
+                                          ),
+                                        ),
+                                        if (div.isTaxFree) ...[
+                                          const SizedBox(width: 4),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.withValues(alpha: isDark ? 0.25 : 0.12),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Text(
+                                              '비과세',
+                                              style: TextStyle(
+                                                fontSize: 9.5,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.blue,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                     const SizedBox(height: 5),
                                     Row(
                                       children: [
                                         Icon(
-                                          Icons.event_available_outlined,
-                                          size: 12.5,
-                                          color: isDark ? Colors.grey[500] : const Color(0xFF8C847A),
+                                          div.isHistorical ? Icons.check_circle_outline : Icons.event_available_outlined,
+                                          size: 13,
+                                          color: div.isHistorical ? const Color(0xFF2E7D32) : (isDark ? Colors.grey[500] : const Color(0xFF8C847A)),
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          '지급: ${div.paymentDate.year}.${div.paymentDate.month.toString().padLeft(2, '0')}.${div.paymentDate.day.toString().padLeft(2, '0')}',
+                                          '${div.isHistorical ? "실지급" : "예상지급"}: ${div.paymentDate.year}.${div.paymentDate.month.toString().padLeft(2, '0')}.${div.paymentDate.day.toString().padLeft(2, '0')}',
                                           style: TextStyle(
                                             fontSize: 11.5,
                                             fontWeight: FontWeight.w500,
@@ -595,7 +681,7 @@ void showDividendDetailsSheet(BuildContext context, StockDividendSummary summary
                                         ),
                                         Flexible(
                                           child: Text(
-                                            '배당락: ${div.date.year}.${div.date.month.toString().padLeft(2, '0')}.${div.date.day.toString().padLeft(2, '0')}',
+                                            '기준일: ${div.date.year}.${div.date.month.toString().padLeft(2, '0')}.${div.date.day.toString().padLeft(2, '0')}',
                                             style: TextStyle(
                                               fontSize: 11,
                                               color: isDark ? Colors.grey[500] : const Color(0xFF9E9790),
@@ -618,7 +704,9 @@ void showDividendDetailsSheet(BuildContext context, StockDividendSummary summary
                                     style: TextStyle(
                                       fontWeight: FontWeight.w900,
                                       fontSize: 15.5,
-                                      color: isDark ? const Color(0xFF34D399) : primaryColor,
+                                      color: div.isHistorical 
+                                          ? const Color(0xFF2E7D32) 
+                                          : (isDark ? const Color(0xFF34D399) : primaryColor),
                                       letterSpacing: -0.3,
                                     ),
                                   ),
@@ -638,6 +726,46 @@ void showDividendDetailsSheet(BuildContext context, StockDividendSummary summary
                         );
                       },
                     ),
+            ),
+            // 배당 정보 안내 문구
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1F2937).withValues(alpha: 0.8)
+                    : const Color(0xFFF5F3EF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF374151)
+                      : const Color(0xFFDDD8CE),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 13,
+                    color: isDark ? Colors.grey[500] : const Color(0xFFAA9B8A),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '배당 지급일과 수령액은 공시 기준 추정값입니다. 실제 증권사 입금일은 결제 주기(T+2) 및 원천징수(15.4%) 처리 시점에 따라 1~3 영업일 차이가 날 수 있습니다.',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        height: 1.5,
+                        color: isDark
+                            ? Colors.grey[500]
+                            : const Color(0xFF9E9790),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
