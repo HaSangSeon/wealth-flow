@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WealthFlow - Google Play Feature Graphic Generator</title>
+  <!-- Pretendard Font CDN -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <!-- html2canvas for High-Res Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
+      background: #0d1411;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Control Toolbar */
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 24px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 10px 18px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 9999px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #10B981, #059669);
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #34D399, #10B981);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+    }
+
+    .info-badge {
+      font-size: 13px;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+    }
+
+    /* Graphic Canvas Wrapper */
+    .canvas-wrapper {
+      position: relative;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    /* Exactly 1024 x 500 px Feature Graphic Container */
+    #feature-graphic {
+      position: relative;
+      width: 1024px;
+      height: 500px;
+      background: #14342B; /* Base Deep Forest Green */
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 48px 64px; /* Generous safe margin > 40px */
+      user-select: none;
+    }
+
+    /* Rich Ambient Background Gradients */
+    .bg-gradient-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 18% 25%, rgba(52, 211, 153, 0.18) 0%, transparent 45%),
+        radial-gradient(circle at 82% 65%, rgba(16, 185, 129, 0.22) 0%, transparent 55%),
+        radial-gradient(circle at 50% 100%, rgba(6, 78, 59, 0.6) 0%, transparent 60%),
+        linear-gradient(135deg, #0f2b23 0%, #14342B 50%, #0c201a 100%);
+      z-index: 1;
+    }
+
+    /* Subtle Geometric Mesh Pattern for Fintech Texture */
+    .bg-grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 80%);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* Safe Area Outline Guide (Toggleable) */
+    .safe-guide {
+      position: absolute;
+      top: 40px;
+      bottom: 40px;
+      left: 40px;
+      right: 40px;
+      border: 1px dashed rgba(245, 158, 11, 0.45);
+      border-radius: 8px;
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+    }
+    .safe-guide::after {
+      content: "Google Play 40px Safe Area Guide";
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #f59e0b;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Left Content Section (~55%) */
+    .content-left {
+      position: relative;
+      z-index: 10;
+      width: 520px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+    }
+
+    /* Subheading */
+    .subhead-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      align-self: flex-start;
+    }
+    .subhead-icon {
+      width: 18px;
+      height: 18px;
+      color: #34D399;
+    }
+    .subhead-text {
+      color: #34D399;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    /* Main Branding Title */
+    .title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .brand-title {
+      font-size: 44px;
+      font-weight: 800;
+      letter-spacing: -1.2px;
+      color: #FFFFFF;
+      line-height: 1.15;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo-mark {
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+    }
+    .main-description {
+      color: #EDE8DF; /* Warm Ivory */
+      font-size: 20px;
+      font-weight: 500;
+      line-height: 1.45;
+      letter-spacing: -0.4px;
+    }
+
+    /* Pill Tags */
+    .tags-container {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+    .pill-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #E0E7E3;
+      padding: 7px 16px;
+      border-radius: 9999px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .pill-tag svg {
+      width: 14px;
+      height: 14px;
+      stroke: #34D399;
+    }
+
+    /* Secondary Trust Text */
+    .trust-footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+      color: rgba(226, 232, 240, 0.65);
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: -0.2px;
+    }
+    .trust-dot {
+      width: 4px;
+      height: 4px;
+      background: #10B981;
+      border-radius: 50%;
+    }
+
+    /* Right Mockup Section (~45%) */
+    .content-right {
+      position: relative;
+      z-index: 10;
+      width: 380px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      perspective: 1200px;
+    }
+
+    /* Ambient Device Glow */
+    .device-glow {
+      position: absolute;
+      width: 320px;
+      height: 380px;
+      background: radial-gradient(circle, rgba(52, 211, 153, 0.22) 0%, rgba(16, 185, 129, 0.08) 50%, transparent 75%);
+      filter: blur(40px);
+      z-index: 1;
+      transform: rotate(6deg) translateY(10px);
+      pointer-events: none;
+    }
+
+    /* Smartphone Device Frame */
+    .phone-mockup {
+      position: relative;
+      z-index: 2;
+      width: 290px;
+      height: 440px;
+      background: #0c1813;
+      border: 7px solid #233e33;
+      border-radius: 38px;
+      box-shadow: 
+        0 24px 50px -10px rgba(0, 0, 0, 0.7),
+        0 10px 20px -5px rgba(0, 0, 0, 0.5),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+        0 0 0 1px rgba(0, 0, 0, 0.8);
+      transform: rotate(6.5deg) translateY(4px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Speaker Pill / Dynamic Island */
+    .phone-speaker {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 68px;
+      height: 12px;
+      background: #15261f;
+      border-radius: 20px;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+    }
+    .speaker-lens {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #09120e;
+    }
+    .speaker-sensor {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: #070e0b;
+    }
+
+    /* Screen UI Interior */
+    .phone-screen {
+      padding: 26px 14px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+      background: linear-gradient(180deg, #0e1e17 0%, #091712 100%);
+    }
+
+    /* App Header in Phone */
+    .mockup-top-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px 2px 4px;
+    }
+    .mockup-brand {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94A3B8;
+      letter-spacing: -0.2px;
+    }
+    .mockup-live-pill {
+      font-size: 9px;
+      font-weight: 700;
+      color: #34D399;
+      background: rgba(52, 211, 153, 0.12);
+      border: 1px solid rgba(52, 211, 153, 0.25);
+      padding: 2px 7px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .live-dot {
+      width: 4px;
+      height: 4px;
+      background: #34D399;
+      border-radius: 50%;
+    }
+
+    /* Minimal Card 1: Total Asset & Growth */
+    .mockup-asset-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .asset-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .asset-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #94A3B8;
+      letter-spacing: -0.2px;
+    }
+    .asset-badge {
+      font-size: 9.5px;
+      font-weight: 700;
+      color: #34D399;
+      background: rgba(52, 211, 153, 0.15);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .asset-amount {
+      font-size: 19px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: -0.6px;
+      line-height: 1.2;
+    }
+
+    /* Card 2: Compounding Curve Chart Card */
+    .mockup-chart-card {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: hidden;
+    }
+    .chart-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .chart-card-title {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #E2E8F0;
+      letter-spacing: -0.2px;
+    }
+    .chart-metric-tag {
+      font-size: 9px;
+      font-weight: 600;
+      color: #34D399;
+    }
+
+    /* Inline SVG Chart Box */
+    .chart-svg-box {
+      width: 100%;
+      height: 145px;
+      position: relative;
+    }
+    .chart-svg-box svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* Chart Milestone Footer */
+    .chart-milestones {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 4px;
+      margin-top: -4px;
+    }
+    .milestone-text {
+      font-size: 8px;
+      font-weight: 600;
+      color: #64748B;
+    }
+    .milestone-active {
+      color: #34D399;
+      font-weight: 700;
+    }
+
+    /* Card 3: Mini Dividend Income Bar */
+    .mockup-footer-card {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(52, 211, 153, 0.2);
+      border-radius: 10px;
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dividend-label {
+      font-size: 9.5px;
+      font-weight: 600;
+      color: #CBD5E1;
+    }
+    .dividend-val {
+      font-size: 11px;
+      font-weight: 800;
+      color: #34D399;
+    }
+
+    /* Floating Accents */
+    .floating-pill-badge {
+      position: absolute;
+      background: rgba(19, 44, 35, 0.88);
+      border: 1px solid rgba(52, 211, 153, 0.4);
+      padding: 8px 14px;
+      border-radius: 12px;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px);
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: floatBadge 4s ease-in-out infinite alternate;
+    }
+    .floating-pill-badge.top-left {
+      top: 38px;
+      left: -28px;
+      transform: rotate(-5deg);
+    }
+    .floating-pill-badge.bottom-right {
+      bottom: 22px;
+      right: -18px;
+      transform: rotate(4deg);
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(15, 36, 29, 0.9);
+    }
+    .floating-icon {
+      width: 20px;
+      height: 20px;
+      background: rgba(52, 211, 153, 0.15);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #34D399;
+    }
+    .floating-text-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .floating-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: #94A3B8;
+    }
+    .floating-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    /* Bottom Information Panel */
+    .info-panel {
+      margin-top: 24px;
+      max-width: 1024px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .info-item strong {
+      color: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Controls Bar -->
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="downloadImage('exact')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      구글 플레이 규격 다운로드 (1024 x 500 PNG)
+    </button>
+    <button class="btn btn-secondary" onclick="downloadImage('2x')">
+      고해상도 다운로드 (2048 x 1000 @2x)
+    </button>
+    <button class="btn btn-secondary" id="guideToggleBtn" onclick="toggleGuide()">
+      안전 영역(40px) 가이드 표시
+    </button>
+    <div class="info-badge">
+      <span>규격: 1024 x 500 px (Google Play Feature Graphic)</span>
+    </div>
+  </div>
+
+  <!-- Feature Graphic Area (Exactly 1024x500) -->
+  <div class="canvas-wrapper">
+    <div id="feature-graphic">
+      <!-- Background Layers -->
+      <div class="bg-gradient-layer"></div>
+      <div class="bg-grid-overlay"></div>
+
+      <!-- Safe Area (40px) Visual Guide -->
+      <div id="safeGuide" class="safe-guide"></div>
+
+      <!-- Left Section: Branding & Copy (~55%) -->
+      <div class="content-left">
+        <!-- Subhead -->
+        <div class="subhead-badge">
+          <svg class="subhead-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+            <polyline points="17 6 23 6 23 12"></polyline>
+          </svg>
+          <span class="subhead-text">배당 복리부터 연금 절세까지</span>
+        </div>
+
+        <!-- Main Title Group -->
+        <div class="title-group">
+          <h1 class="brand-title">
+            <!-- Signature WealthFlow Logo Mark -->
+            <svg class="brand-logo-mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="48" height="48" rx="14" fill="url(#logo_grad)" />
+              <path d="M12 32C18 32 19 22 26 22C31 22 32 28 36 17" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="36" cy="17" r="3.2" fill="#34D399" stroke="#FFFFFF" stroke-width="2" />
+              <defs>
+                <linearGradient id="logo_grad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#10B981" />
+                  <stop offset="1" stop-color="#047857" />
+                </linearGradient>
+              </defs>
+            </svg>
+            웰스플로우
+          </h1>
+          <p class="main-description">체계적인 은퇴 자산관리 시뮬레이터</p>
+        </div>
+
+        <!-- Keyword Tags (Pill Badges) -->
+        <div class="tags-container">
+          <div class="pill-tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            #배당 재투자
+          </div>
+          <div class="pill-tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+              <polyline points="17 6 23 6 23 12"/>
+            </svg>
+            #복리 성장
+          </div>
+          <div class="pill-tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <line x1="12" y1="8" x2="12" y2="16"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+            #세액공제 계산
+          </div>
+        </div>
+
+        <!-- Subtle Trust Footnote -->
+        <div class="trust-footer">
+          <span class="trust-dot"></span>
+          <span>안전한 로컬 자산 보관</span>
+          <span>·</span>
+          <span>ISA / 연금저축 최적화</span>
+          <span>·</span>
+          <span>100% 무료 시뮬레이션</span>
+        </div>
+      </div>
+
+      <!-- Right Section: Device Mockup (~45%) -->
+      <div class="content-right">
+        <!-- Ambient Back Glow -->
+        <div class="device-glow"></div>
+
+        <!-- Floating Info Pill 1: Target Goal -->
+        <div class="floating-pill-badge top-left">
+          <div class="floating-icon">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <div class="floating-text-group">
+            <span class="floating-title">연 배당 목표</span>
+            <span class="floating-val">₩3,420만 달성</span>
+          </div>
+        </div>
+
+        <!-- Floating Info Pill 2: Tax Saving -->
+        <div class="floating-pill-badge bottom-right">
+          <div class="floating-icon" style="color: #6EE7B7; background: rgba(110, 231, 183, 0.15);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <div class="floating-text-group">
+            <span class="floating-title">절세 혜택</span>
+            <span class="floating-val">최대 16.5% 공제</span>
+          </div>
+        </div>
+
+        <!-- Smartphone Device Frame -->
+        <div class="phone-mockup">
+          <!-- Speaker Slit / Island -->
+          <div class="phone-speaker">
+            <div class="speaker-lens"></div>
+            <div class="speaker-sensor"></div>
+          </div>
+
+          <!-- Inside Phone Screen -->
+          <div class="phone-screen">
+            <!-- App Mini Header -->
+            <div class="mockup-top-nav">
+              <span class="mockup-brand">WealthFlow 시뮬레이터</span>
+              <span class="mockup-live-pill">
+                <span class="live-dot"></span>
+                실시간 복리
+              </span>
+            </div>
+
+            <!-- Card 1: Total Wealth Overview -->
+            <div class="mockup-asset-card">
+              <div class="asset-label-row">
+                <span class="asset-label">예상 은퇴 순자산</span>
+                <span class="asset-badge">+24.8% 복리 가속</span>
+              </div>
+              <div class="asset-amount">₩ 1,248,500,000</div>
+            </div>
+
+            <!-- Card 2: Compounding Curve Chart -->
+            <div class="mockup-chart-card">
+              <div class="chart-card-header">
+                <span class="chart-card-title">복리 성장 시뮬레이션</span>
+                <span class="chart-metric-tag">우상향 가속 구간</span>
+              </div>
+
+              <!-- Inline SVG Compounding Curve -->
+              <div class="chart-svg-box">
+                <svg viewBox="0 0 240 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <!-- Grid Guides -->
+                  <line x1="0" y1="35" x2="240" y2="35" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3"/>
+                  <line x1="0" y1="70" x2="240" y2="70" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3"/>
+                  <line x1="0" y1="105" x2="240" y2="105" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3"/>
+
+                  <!-- Linear Comparison Line (No Reinvestment) -->
+                  <path d="M 10 115 L 230 78" stroke="rgba(148, 163, 184, 0.28)" stroke-width="1.8" stroke-dasharray="4 4"/>
+
+                  <!-- Compounding Area Gradient Fill -->
+                  <path d="M 10 115 C 65 113, 115 102, 155 72 C 185 49, 205 28, 230 14 L 230 125 L 10 125 Z" 
+                        fill="url(#compounding_fill)" />
+
+                  <!-- Main Upward Compounding Curve Line -->
+                  <path d="M 10 115 C 65 113, 115 102, 155 72 C 185 49, 205 28, 230 14" 
+                        stroke="url(#compounding_stroke)" 
+                        stroke-width="3.2" 
+                        stroke-linecap="round" />
+
+                  <!-- Milestone Points -->
+                  <circle cx="10" cy="115" r="3.5" fill="#14342B" stroke="#34D399" stroke-width="2" />
+                  <circle cx="120" cy="95" r="3.5" fill="#14342B" stroke="#34D399" stroke-width="2" />
+                  <circle cx="178" cy="54" r="3.5" fill="#14342B" stroke="#34D399" stroke-width="2" />
+
+                  <!-- Golden Peak Point with Pulse Aura -->
+                  <circle cx="230" cy="14" r="8" fill="rgba(52, 211, 153, 0.25)" />
+                  <circle cx="230" cy="14" r="4.5" fill="#FFFFFF" stroke="#10B981" stroke-width="2.5" />
+
+                  <!-- Tooltip Tag on Chart -->
+                  <g transform="translate(138, 4)">
+                    <rect width="84" height="20" rx="6" fill="#14342B" stroke="rgba(52, 211, 153, 0.5)" stroke-width="1"/>
+                    <text x="42" y="13.5" text-anchor="middle" fill="#34D399" font-size="8.5" font-weight="700" font-family="Pretendard">
+                      은퇴 목표 초과 달성
+                    </text>
+                  </g>
+
+                  <!-- SVG Gradients -->
+                  <defs>
+                    <linearGradient id="compounding_stroke" x1="10" y1="115" x2="230" y2="14" gradientUnits="userSpaceOnUse">
+                      <stop stop-color="#059669" />
+                      <stop offset="0.45" stop-color="#10B981" />
+                      <stop offset="1" stop-color="#6EE7B7" />
+                    </linearGradient>
+                    <linearGradient id="compounding_fill" x1="120" y1="14" x2="120" y2="125" gradientUnits="userSpaceOnUse">
+                      <stop stop-color="rgba(52, 211, 153, 0.35)" />
+                      <stop offset="0.7" stop-color="rgba(16, 185, 129, 0.08)" />
+                      <stop offset="1" stop-color="rgba(20, 52, 43, 0)" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+
+              <!-- Timeline Milestones -->
+              <div class="chart-milestones">
+                <span class="milestone-text">시작</span>
+                <span class="milestone-text">5년차</span>
+                <span class="milestone-text">15년차</span>
+                <span class="milestone-text milestone-active">은퇴 시점</span>
+              </div>
+            </div>
+
+            <!-- Card 3: Monthly Dividend Estimate -->
+            <div class="mockup-footer-card">
+              <span class="dividend-label">월 환산 배당 흐름</span>
+              <span class="dividend-val">₩ 2,850,000 / 월</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer Information -->
+  <div class="info-panel">
+    <div class="info-item">
+      <span>📐 규격:</span>
+      <strong>1024 x 500 px (가로형 배너)</strong>
+    </div>
+    <div class="info-item">
+      <span>🎨 배경:</span>
+      <strong>#14342B (딥 포레스트 그린)</strong>
+    </div>
+    <div class="info-item">
+      <span>🛡️ 안전 여백:</span>
+      <strong>상하좌우 48px 이상 유지</strong>
+    </div>
+    <div class="info-item">
+      <span>⚡ 파일 포맷:</span>
+      <strong>24비트 무손실 PNG</strong>
+    </div>
+  </div>
+
+  <!-- Export Script -->
+  <script>
+    function toggleGuide() {
+      const guide = document.getElementById('safeGuide');
+      const btn = document.getElementById('guideToggleBtn');
+      if (guide.style.display === 'block') {
+        guide.style.display = 'none';
+        btn.textContent = '안전 영역(40px) 가이드 표시';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+      } else {
+        guide.style.display = 'block';
+        btn.textContent = '가이드 숨기기';
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary');
+      }
+    }
+
+    async function downloadImage(type) {
+      const element = document.getElementById('feature-graphic');
+      const guide = document.getElementById('safeGuide');
+      const previousGuideDisplay = guide.style.display;
+      guide.style.display = 'none'; // Ensure guide is never in the exported screenshot
+
+      // Show temporary processing state
+      const primaryBtn = document.querySelector('.btn-primary');
+      const originalText = primaryBtn.innerHTML;
+      primaryBtn.innerHTML = '렌더링 중... 잠시만 기다려주세요';
+      primaryBtn.style.opacity = '0.7';
+
+      try {
+        const scaleFactor = type === '2x' ? 2 : 1;
+        
+        // Use html2canvas with optimal settings
+        const canvas = await html2canvas(element, {
+          scale: scaleFactor * 2, // High resolution capture
+          width: 1024,
+          height: 500,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#14342B',
+          logging: false
+        });
+
+        // Target output canvas
+        let finalCanvas = canvas;
+        const targetWidth = type === '2x' ? 2048 : 1024;
+        const targetHeight = type === '2x' ? 1000 : 500;
+
+        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+          finalCanvas = document.createElement('canvas');
+          finalCanvas.width = targetWidth;
+          finalCanvas.height = targetHeight;
+          const ctx = finalCanvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
+        }
+
+        // Trigger download
+        const link = document.createElement('a');
+        const filename = type === '2x' 
+          ? 'wealthflow_feature_graphic_2048x1000.png' 
+          : 'wealthflow_feature_graphic_1024x500.png';
+        link.download = filename;
+        link.href = finalCanvas.toDataURL('image/png', 1.0);
+        link.click();
+      } catch (err) {
+        console.error('이미지 내보내기 실패:', err);
+        alert('이미지 생성 중 오류가 발생했습니다. 브라우저 콘솔을 확인해주세요.');
+      } finally {
+        guide.style.display = previousGuideDisplay;
+        primaryBtn.innerHTML = originalText;
+        primaryBtn.style.opacity = '1';
+      }
+    }
+  </script>
+</body>
+</html>

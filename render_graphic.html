@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1024, initial-scale=1.0">
+  <title>WealthFlow Feature Graphic</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 1024px;
+      height: 500px;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      background: #14342B;
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #feature-graphic {
+      position: relative;
+      width: 1024px;
+      height: 500px;
+      background: #14342B;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 48px 64px;
+      user-select: none;
+    }
+
+    .bg-gradient-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 18% 25%, rgba(52, 211, 153, 0.18) 0%, transparent 45%),
+        radial-gradient(circle at 82% 65%, rgba(16, 185, 129, 0.22) 0%, transparent 55%),
+        radial-gradient(circle at 50% 100%, rgba(6, 78, 59, 0.6) 0%, transparent 60%),
+        linear-gradient(135deg, #0f2b23 0%, #14342B 50%, #0c201a 100%);
+      z-index: 1;
+    }
+
+    .bg-grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 80%);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .content-left {
+      position: relative;
+      z-index: 10;
+      width: 520px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+    }
+
+    .subhead-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      align-self: flex-start;
+    }
+    .subhead-icon {
+      width: 18px;
+      height: 18px;
+      color: #34D399;
+    }
+    .subhead-text {
+      color: #34D399;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .brand-title {
+      font-size: 44px;
+      font-weight: 800;
+      letter-spacing: -1.2px;
+      color: #FFFFFF;
+      line-height: 1.15;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo-mark {
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+    }
+    .main-description {
+      color: #EDE8DF;
+      font-size: 20px;
+      font-weight: 500;
+      line-height: 1.45;
+      letter-spacing: -0.4px;
+    }
+
+    .tags-container {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+    .pill-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #E0E7E3;
+      padding: 7px 16px;
+      border-radius: 9999px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .pill-tag svg {
+      width: 14px;
+      height: 14px;
+      stroke: #34D399;
+    }
+
+    .trust-footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+      color: rgba(226, 232, 240, 0.65);
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: -0.2px;
+    }
+    .trust-dot {
+      width: 4px;
+      height: 4px;
+      background: #10B981;
+      border-radius: 50%;
+    }
+
+    .content-right {
+      position: relative;
+      z-index: 10;
+      width: 380px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      perspective: 1200px;
+    }
+
+    .device-glow {
+      position: absolute;
+      width: 320px;
+      height: 380px;
+      background: radial-gradient(circle, rgba(52, 211, 153, 0.22) 0%, rgba(16, 185, 129, 0.08) 50%, transparent 75%);
+      filter: blur(40px);
+      z-index: 1;
+      transform: rotate(6deg) translateY(10px);
+      pointer-events: none;
+    }
+
+    .phone-mockup {
+      position: relative;
+      z-index: 2;
+      width: 290px;
+      height: 440px;
+      background: #0c1813;
+      border: 7px solid #233e33;
+      border-radius: 38px;
+      box-shadow: 
+        0 24px 50px -10px rgba(0, 0, 0, 0.7),
+        0 10px 20px -5px rgba(0, 0, 0, 0.5),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+        0 0 0 1px rgba(0, 0, 0, 0.8);
+      transform: rotate(6.5deg) translateY(4px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .phone-speaker {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 68px;
+      height: 12px;
+      background: #15261f;
+      border-radius: 20px;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+    }
+    .speaker-lens {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #09120e;
+    }
+    .speaker-sensor {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: #070e0b;
+    }
+
+    .phone-screen {
+      padding: 26px 14px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+      background: linear-gradient(180deg, #0e1e17 0%, #091712 100%);
+    }
+
+    .mockup-top-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px 2px 4px;
+    }
+    .mockup-brand {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94A3B8;
+      letter-spacing: -0.2px;
+    }
+    .mockup-live-pill {
+      font-size: 9px;
+      font-weight: 700;
+      color: #34D399;
+      background: rgba(52, 211, 153, 0.12);
+      border: 1px solid rgba(52, 211, 153, 0.25);
+      padding: 2px 7px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .live-dot {
+      width: 4px;
+      height: 4px;
+      background: #34D399;
+      border-radius: 50%;
+    }
+
+    .mockup-asset-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .asset-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .asset-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #94A3B8;
+      letter-spacing: -0.2px;
+    }
+    .asset-badge {
+      font-size: 9.5px;
+      font-weight: 700;
+      color: #34D399;
+      background: rgba(52, 211, 153, 0.15);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .asset-amount {
+      font-size: 19px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: -0.6px;
+      line-height: 1.2;
+    }
+
+    .mockup-chart-card {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: hidden;
+    }
+    .chart-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .chart-card-title {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #E2E8F0;
+      letter-spacing: -0.2px;
+    }
+    .chart-metric-tag {
+      font-size: 9px;
+      font-weight: 600;
+      color: #34D399;
+    }
+
+    .chart-svg-box {
+      width: 100%;
+      height: 145px;
+      position: relative;
+    }
+    .chart-svg-box svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .chart-milestones {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 4px;
+      margin-top: -4px;
+    }
+    .milestone-text {
+      font-size: 8px;
+      font-weight: 600;
+      color: #64748B;
+    }
+    .milestone-active {
+      color: #34D399;
+      font-weight: 700;
+    }
+
+    .mockup-footer-card {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(52, 211, 153, 0.2);
+      border-radius: 10px;
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dividend-label {
+      font-size: 9.5px;
+      font-weight: 600;
+      color: #CBD5E1;
+    }
+    .dividend-val {
+      font-size: 11px;
+      font-weight: 800;
+      color: #34D399;
+    }
+
+    .floating-pill-badge {
+      position: absolute;
+      background: rgba(19, 44, 35, 0.88);
+      border: 1px solid rgba(52, 211, 153, 0.4);
+      padding: 8px 14px;
+      border-radius: 12px;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px);
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .floating-pill-badge.top-left {
+      top: 16px;
+      left: -50px;
+      transform: rotate(-6deg);
+    }
+    .floating-pill-badge.bottom-right {
+      bottom: 22px;
+      right: -22px;
+      transform: rotate(4deg);
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(15, 36, 29, 0.9);
+    }
+    .floating-icon {
+      width: 20px;
+      height: 20px;
+      background: rgba(52, 211, 153, 0.15);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #34D399;
+    }
+    .floating-text-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .floating-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: #94A3B8;
+    }
+    .floating-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+  </style>
+</head>
+<body>
+  <div id="feature-graphic">
+    <div class="bg-gradient-layer"></div>
+    <div class="bg-grid-overlay"></div>
+
+    <div class="content-left">
+      <div class="subhead-badge">
+        <svg class="subhead-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+          <polyline points="17 6 23 6 23 12"></polyline>
+        </svg>
+        <span class="subhead-text">배당 복리부터 연금 절세까지</span>
+      </div>
+
+      <div class="title-group">
+        <h1 class="brand-title">
+          <svg class="brand-logo-mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="48" height="48" rx="14" fill="url(#logo_grad)" />
+            <path d="M12 32C18 32 19 22 26 22C31 22 32 28 36 17" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="36" cy="17" r="3.2" fill="#34D399" stroke="#FFFFFF" stroke-width="2" />
+            <defs>
+              <linearGradient id="logo_grad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#10B981" />
+                <stop offset="1" stop-color="#047857" />
+              </linearGradient>
+            </defs>
+          </svg>
+          웰스플로우
+        </h1>
+        <p class="main-description">체계적인 은퇴 자산관리 시뮬레이터</p>
+      </div>
+
+      <div class="tags-container">
+        <div class="pill-tag">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          #배당 재투자
+        </div>
+        <div class="pill-tag">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+            <polyline points="17 6 23 6 23 12"/>
+          </svg>
+          #복리 성장
+        </div>
+        <div class="pill-tag">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <line x1="12" y1="8" x2="12" y2="16"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+          #세액공제 계산
+        </div>
+      </div>
+
+      <div class="trust-footer">
+        <span class="trust-dot"></span>
+        <span>안전한 로컬 자산 보관</span>
+        <span>·</span>
+        <span>ISA / 연금저축 최적화</span>
+        <span>·</span>
+        <span>100% 무료 시뮬레이션</span>
+      </div>
+    </div>
+
+    <div class="content-right">
+      <div class="device-glow"></div>
+
+      <div class="floating-pill-badge top-left">
+        <div class="floating-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+        </div>
+        <div class="floating-text-group">
+          <span class="floating-title">연 배당 목표</span>
+          <span class="floating-val">₩3,420만 달성</span>
+        </div>
+      </div>
+
+      <div class="floating-pill-badge bottom-right">
+        <div class="floating-icon" style="color: #6EE7B7; background: rgba(110, 231, 183, 0.15);">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <div class="floating-text-group">
+          <span class="floating-title">절세 혜택</span>
+          <span class="floating-val">최대 16.5% 공제</span>
+        </div>
+      </div>
+
+      <div class="phone-mockup">
+        <div class="phone-speaker">
+          <div class="speaker-lens"></div>
+          <div class="speaker-sensor"></div>
+        </div>
+
+        <div class="phone-screen">
+          <div class="mockup-top-nav">
+            <span class="mockup-brand">WealthFlow 시뮬레이터</span>
+            <span class="mockup-live-pill">
+              <span class="live-dot"></span>
+              실시간 복리
+            </span>
+          </div>
+
+          <div class="mockup-asset-card">
+            <div class="asset-label-row">
+              <span class="asset-label">예상 은퇴 순자산</span>
+              <span class="asset-badge">+24.8% 복리 가속</span>
+            </div>
+            <div class="asset-amount">₩ 1,248,500,000</div>
+          </div>
+
+          <div class="mockup-chart-card">
+            <div class="chart-card-header">
+              <span class="chart-card-title">복리 성장 시뮬레이션</span>
+              <span class="chart-metric-tag">우상향 가속 구간</span>
+            </div>
+
+            <div class="chart-svg-box">
+              <svg viewBox="0 0 240 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <line x1="0" y1="35" x2="240" y2="35" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3"/>
+                <line x1="0" y1="70" x2="240" y2="70" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3"/>
+                <line x1="0" y1="105" x2="240" y2="105" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3"/>
+
+                <path d="M 10 115 L 230 78" stroke="rgba(148, 163, 184, 0.28)" stroke-width="1.8" stroke-dasharray="4 4"/>
+
+                <path d="M 10 115 C 65 113, 115 102, 155 72 C 185 49, 205 28, 230 14 L 230 125 L 10 125 Z" 
+                      fill="url(#compounding_fill)" />
+
+                <path d="M 10 115 C 65 113, 115 102, 155 72 C 185 49, 205 28, 230 14" 
+                      stroke="url(#compounding_stroke)" 
+                      stroke-width="3.2" 
+                      stroke-linecap="round" />
+
+                <circle cx="10" cy="115" r="3.5" fill="#14342B" stroke="#34D399" stroke-width="2" />
+                <circle cx="120" cy="95" r="3.5" fill="#14342B" stroke="#34D399" stroke-width="2" />
+                <circle cx="178" cy="54" r="3.5" fill="#14342B" stroke="#34D399" stroke-width="2" />
+
+                <circle cx="230" cy="14" r="8" fill="rgba(52, 211, 153, 0.25)" />
+                <circle cx="230" cy="14" r="4.5" fill="#FFFFFF" stroke="#10B981" stroke-width="2.5" />
+
+                <g transform="translate(138, 4)">
+                  <rect width="84" height="20" rx="6" fill="#14342B" stroke="rgba(52, 211, 153, 0.5)" stroke-width="1"/>
+                  <text x="42" y="13.5" text-anchor="middle" fill="#34D399" font-size="8.5" font-weight="700" font-family="Pretendard">
+                    은퇴 목표 초과 달성
+                  </text>
+                </g>
+
+                <defs>
+                  <linearGradient id="compounding_stroke" x1="10" y1="115" x2="230" y2="14" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#059669" />
+                    <stop offset="0.45" stop-color="#10B981" />
+                    <stop offset="1" stop-color="#6EE7B7" />
+                  </linearGradient>
+                  <linearGradient id="compounding_fill" x1="120" y1="14" x2="120" y2="125" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="rgba(52, 211, 153, 0.35)" />
+                    <stop offset="0.7" stop-color="rgba(16, 185, 129, 0.08)" />
+                    <stop offset="1" stop-color="rgba(20, 52, 43, 0)" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+
+            <div class="chart-milestones">
+              <span class="milestone-text">시작</span>
+              <span class="milestone-text">5년차</span>
+              <span class="milestone-text">15년차</span>
+              <span class="milestone-text milestone-active">은퇴 시점</span>
+            </div>
+          </div>
+
+          <div class="mockup-footer-card">
+            <span class="dividend-label">월 환산 배당 흐름</span>
+            <span class="dividend-val">₩ 2,850,000 / 월</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
