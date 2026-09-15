@@ -34,6 +34,10 @@ import 'common_widgets.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   HomeWidget.setAppGroupId('group.com.hadoseo.wealthflow');
   await Hive.initFlutter();
   final storage = StorageService();
@@ -178,24 +182,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   static const _pages = [
     _OnboardingPage(
-      icon: Icons.account_balance_wallet,
-      title: '내 자산을 한눈에',
-      description: '보유한 주식, ETF, 연금, IRP, ISA 등\n모든 자산을 한 곳에서 관리하세요.',
+      visual: _DividendMockVisual(),
+      title: '잠든 사이에도\n돈이 들어오는 마법',
+      description: '보유한 주식의 배당금이 언제, 얼마나 들어오는지 파악하세요.\n증권사 앱에선 볼 수 없는\n직관적인 배당 캘린더가 완성됩니다.',
     ),
     _OnboardingPage(
-      icon: Icons.security,
-      title: '내 폰에 안전하게 저장',
-      description: '자산 정보는 외부 서버가 아닌 내 폰에만\n로컬 저장되어 유출 우려 없이 안전합니다.\n\n⚠️ 단, 앱 삭제 시 데이터도 함께 날아갑니다!',
+      visual: _FireMockVisual(),
+      title: '경제적 자유(FIRE)를\n향한 네비게이션',
+      description: '지금처럼 모으면 언제 은퇴할 수 있을까?\n물가 상승률과 배당 복리를 반영한\n나만의 은퇴 시뮬레이션을 돌려보세요.',
     ),
     _OnboardingPage(
-      icon: Icons.stacked_line_chart,
-      title: '복리의 마법, 시뮬레이션',
-      description: '연평균 수익률과 월 투자금을 설정하면\n미래 자산을 복리로 시뮬레이션 합니다.',
-    ),
-    _OnboardingPage(
-      icon: Icons.trending_up,
-      title: '나만의 투자 시나리오',
-      description: '10년, 15년, 20년 후\n내 자산이 얼마나 불어날지 확인하세요.',
+      visual: _PrivacyMockVisual(),
+      title: '오직 나만을 위한\n프라이빗 자산관리',
+      description: '불안하고 복잡한 마이데이터 연동은 그만.\n핵심 자산만 1분 만에 가볍게 입력하세요.\n모든 데이터는 내 기기에만 안전하게 저장됩니다.',
     ),
   ];
 
@@ -291,56 +290,333 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
 class _OnboardingPage extends StatelessWidget {
   const _OnboardingPage({
-    required this.icon,
+    required this.visual,
     required this.title,
     required this.description,
   });
 
-  final IconData icon;
+  final Widget visual;
   final String title;
   final String description;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: primaryColor.withValues(alpha: isDark ? 0.2 : 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 48, color: primaryColor),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 200,
+            child: Center(child: visual),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 50),
           Text(
             title,
             style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w900,
               color: isDark ? Colors.white : const Color(0xFF2C2A28),
+              height: 1.3,
+              letterSpacing: -0.5,
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Text(
             description,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w500,
               color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
-              height: 1.5,
+              height: 1.6,
             ),
             textAlign: TextAlign.center,
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DividendMockVisual extends StatelessWidget {
+  const _DividendMockVisual();
+  
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 220,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF242424) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black45 : Colors.black.withValues(alpha: 0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+            border: Border.all(
+              color: isDark ? const Color(0xFF333333) : const Color(0xFFF0EBE1),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.payments_rounded, color: primaryColor, size: 36),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '월 30만원 달성!',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : const Color(0xFF2C2A28),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '이번 달 관리비 커버 완료',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey[400] : const Color(0xFF8C847A),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          top: -15,
+          right: -20,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFDE68A), Color(0xFFF59E0B)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.trending_up_rounded, size: 14, color: Color(0xFF78350F)),
+                SizedBox(width: 4),
+                Text(
+                  '배당 인상 📈',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF78350F),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FireMockVisual extends StatelessWidget {
+  const _FireMockVisual();
+  
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF242424) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black45 : Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+        border: Border.all(
+          color: isDark ? const Color(0xFF333333) : const Color(0xFFF0EBE1),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'FIRE 진척도',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : const Color(0xFF2C2A28),
+                ),
+              ),
+              const Text(
+                '45%',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            height: 12,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E5E5),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: 0.45,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF34D399), Color(0xFF10B981)],
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF10B981),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '바리스타 FIRE 달성!',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.grey[300] : const Color(0xFF4A4A4A),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivacyMockVisual extends StatelessWidget {
+  const _PrivacyMockVisual();
+  
+  @override
+  Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 140,
+          height: 140,
+          decoration: BoxDecoration(
+            color: primaryColor.withValues(alpha: 0.05),
+            shape: BoxShape.circle,
+          ),
+        ),
+        Container(
+          width: 100,
+          height: 100,
+          decoration: BoxDecoration(
+            color: primaryColor.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+        ),
+        Container(
+          width: 70,
+          height: 70,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [primaryColor.withValues(alpha: 0.8), primaryColor],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: 0.4),
+                blurRadius: 15,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.shield_rounded,
+            color: Colors.white,
+            size: 36,
+          ),
+        ),
+        Positioned(
+          bottom: 30,
+          right: 30,
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle_rounded,
+              color: Color(0xFF10B981),
+              size: 16,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -366,6 +642,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    themeNotifier.addListener(_updateWidget);
     _holdings = widget.storage.loadHoldings();
     _settings = widget.storage.loadSettings();
     _updateWidget();
@@ -376,8 +653,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
 
   @override
   void dispose() {
+    themeNotifier.removeListener(_updateWidget);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    _updateWidget();
   }
 
   @override
@@ -524,11 +808,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     double percent = target > 0 ? (_currentValue / target * 100).clamp(0.0, 100.0) : 0.0;
     String percentStr = "은퇴 달성률 " + percent.toStringAsFixed(1) + "%";
     
+    final currentMode = themeNotifier.value;
+    final bool isDark = currentMode == ThemeMode.dark ||
+        (currentMode == ThemeMode.system &&
+            WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark);
+
     HomeWidget.saveWidgetData<String>('total_wealth', formattedTotal);
     HomeWidget.saveWidgetData<String>('progress_percent', percentStr);
+    HomeWidget.saveWidgetData<bool>('is_dark_mode', isDark);
     HomeWidget.updateWidget(
       androidName: 'WealthWidgetProvider',
       iOSName: 'WealthWidget',
+    );
+    HomeWidget.updateWidget(
+      androidName: 'WealthWidgetMiniProvider',
     );
   }
 
@@ -539,6 +832,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
         initialAsset: _currentValue,
         monthlyContribution: _settings.monthlyContribution,
         annualReturnPercent: _settings.annualReturn,
+        dividendYieldPercent: _settings.dividendYield,
         contributionGrowthPercent: _settings.contributionGrowth,
         years: _settings.years,
       );
@@ -575,9 +869,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                 onProfileTap: _openProfileSelectionSheet,
                 onDataRestored: _loadDataForProfile,
               ),
-              PensionTaxTab(
-                holdings: _holdings,
+              DividendTab(
                 storage: widget.storage,
+                holdings: _holdings,
+                onPremiumChanged: () => setState(() {}),
                 onDataRestored: _loadDataForProfile,
               ),
               SimulationTab(
@@ -587,6 +882,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                 years: _settings.years,
                 gain: gain,
                 annualReturn: _settings.annualReturn,
+                dividendYield: _settings.dividendYield,
                 monthlyContribution: _settings.monthlyContribution,
                 contributionGrowth: _settings.contributionGrowth,
                 projectionPoints: _projection,
@@ -594,6 +890,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                 targetYears: _settings.targetYears,
                 onAnnualReturnChanged: (v) => setState(() {
                   _settings.annualReturn = v;
+                  _saveAll();
+                }),
+                onDividendYieldChanged: (v) => setState(() {
+                  _settings.dividendYield = v;
                   _saveAll();
                 }),
                 onMonthlyContributionChanged: (v) => setState(() {
@@ -618,10 +918,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                 }),
                 onDataRestored: _loadDataForProfile,
               ),
-              DividendTab(
-                storage: widget.storage,
+              PensionTaxTab(
                 holdings: _holdings,
-                onPremiumChanged: () => setState(() {}),
+                storage: widget.storage,
                 onDataRestored: _loadDataForProfile,
               ),
             ],
@@ -678,9 +977,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                     ),
                     _buildNavItem(
                       index: 1,
-                      label: '연금/절세',
-                      icon: Icons.savings_outlined,
-                      activeIcon: Icons.savings_rounded,
+                      label: '배당',
+                      icon: Icons.calendar_month_outlined,
+                      activeIcon: Icons.calendar_month_rounded,
                       isDark: isDark,
                       primaryColor: primaryColor,
                     ),
@@ -694,9 +993,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                     ),
                     _buildNavItem(
                       index: 3,
-                      label: '배당',
-                      icon: Icons.calendar_month_outlined,
-                      activeIcon: Icons.calendar_month_rounded,
+                      label: '연금/절세',
+                      icon: Icons.savings_outlined,
+                      activeIcon: Icons.savings_rounded,
                       isDark: isDark,
                       primaryColor: primaryColor,
                     ),

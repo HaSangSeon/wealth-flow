@@ -384,14 +384,60 @@ class DividendPortfolioList extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              summary.name,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    summary.name,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (summary.dividendGrowthRate != null) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: isDark 
+                                            ? [const Color(0xFFFDE68A).withValues(alpha: 0.15), const Color(0xFFF59E0B).withValues(alpha: 0.05)]
+                                            : [const Color(0xFFFFFBEB), const Color(0xFFFEF3C7)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                                        width: 0.5,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.trending_up_rounded,
+                                          size: 11,
+                                          color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+                                        ),
+                                        const SizedBox(width: 2.5),
+                                        Text(
+                                          '배당 인상 +${summary.dividendGrowthRate!.toStringAsFixed(1)}%',
+                                          style: TextStyle(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+                                            letterSpacing: -0.3,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                         ],
@@ -439,6 +485,7 @@ class DividendPortfolioList extends StatelessWidget {
 void showDividendDetailsSheet(BuildContext context, StockDividendSummary summary, bool showForeignInKrw) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final primaryColor = Theme.of(context).colorScheme.primary;
+  final upcomingDividends = summary.dividends.where((d) => !d.isHistorical).toList();
 
   showModalBottomSheet(
     context: context,
@@ -549,7 +596,7 @@ void showDividendDetailsSheet(BuildContext context, StockDividendSummary summary
               color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFEDE9E1),
             ),
             Expanded(
-              child: summary.dividends.isEmpty
+              child: upcomingDividends.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -574,9 +621,9 @@ void showDividendDetailsSheet(BuildContext context, StockDividendSummary summary
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       physics: const BouncingScrollPhysics(),
-                      itemCount: summary.dividends.length,
+                      itemCount: upcomingDividends.length,
                       itemBuilder: (context, index) {
-                        final div = summary.dividends[index];
+                        final div = upcomingDividends[index];
                         final formattedNativeTotal = div.currency == 'KRW'
                             ? '₩${formatDividendNumber(div.krwAmount.round())}'
                             : '${div.currency == 'USD' ? '\$' : '${div.currency} '}${div.totalAmount.toStringAsFixed(2)}';

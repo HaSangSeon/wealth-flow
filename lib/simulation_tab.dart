@@ -21,12 +21,14 @@ class SimulationTab extends StatefulWidget {
     required this.years,
     required this.gain,
     required this.annualReturn,
+    required this.dividendYield,
     required this.monthlyContribution,
     required this.contributionGrowth,
     required this.projectionPoints,
     required this.targetAmount,
     required this.targetYears,
     required this.onAnnualReturnChanged,
+    required this.onDividendYieldChanged,
     required this.onMonthlyContributionChanged,
     required this.onContributionGrowthChanged,
     required this.onYearsChanged,
@@ -42,12 +44,14 @@ class SimulationTab extends StatefulWidget {
   final int years;
   final double gain;
   final double annualReturn;
+  final double dividendYield;
   final double monthlyContribution;
   final double contributionGrowth;
   final List<ProjectionPoint> projectionPoints;
   final double targetAmount;
   final int targetYears;
   final ValueChanged<double> onAnnualReturnChanged;
+  final ValueChanged<double> onDividendYieldChanged;
   final ValueChanged<double> onMonthlyContributionChanged;
   final ValueChanged<double> onContributionGrowthChanged;
   final ValueChanged<int> onYearsChanged;
@@ -213,10 +217,12 @@ class _SimulationTabState extends State<SimulationTab> {
                       const SizedBox(height: 16),
                       ScenarioPanel(
                         annualReturn: widget.annualReturn,
+                        dividendYield: widget.dividendYield,
                         monthlyContribution: widget.monthlyContribution,
                         contributionGrowth: widget.contributionGrowth,
                         years: widget.years,
                         onAnnualReturnChanged: widget.onAnnualReturnChanged,
+                        onDividendYieldChanged: widget.onDividendYieldChanged,
                         onMonthlyContributionChanged: widget.onMonthlyContributionChanged,
                         onContributionGrowthChanged: widget.onContributionGrowthChanged,
                         onYearsChanged: widget.onYearsChanged,
@@ -232,6 +238,7 @@ class _SimulationTabState extends State<SimulationTab> {
                         targetAmount: widget.targetAmount,
                         targetYears: widget.targetYears,
                         annualReturn: widget.annualReturn,
+                        dividendYield: widget.dividendYield,
                         monthlyContribution: widget.monthlyContribution,
                         contributionGrowth: widget.contributionGrowth,
                         onTargetAmountChanged: widget.onTargetAmountChanged,

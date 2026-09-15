@@ -13,8 +13,38 @@ class ProjectionChart extends StatefulWidget {
   State<ProjectionChart> createState() => _ProjectionChartState();
 }
 
-class _ProjectionChartState extends State<ProjectionChart> {
+class _ProjectionChartState extends State<ProjectionChart> with SingleTickerProviderStateMixin {
   int? _selectedIndex;
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOutCubic,
+    );
+    _animationController.forward();
+  }
+
+  @override
+  void didUpdateWidget(ProjectionChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.points != widget.points) {
+      _animationController.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,13 +136,19 @@ class _ProjectionChartState extends State<ProjectionChart> {
                     SizedBox(
                       height: 240,
                       width: double.infinity,
-                      child: CustomPaint(
-                        painter: ProjectionChartPainter(
-                          widget.points,
-                          primaryColor,
-                          isDark,
-                          _selectedIndex,
-                        ),
+                      child: AnimatedBuilder(
+                        animation: _animation,
+                        builder: (context, child) {
+                          return CustomPaint(
+                            painter: ProjectionChartPainter(
+                              widget.points,
+                              primaryColor,
+                              isDark,
+                              _selectedIndex,
+                              _animation.value,
+                            ),
+                          );
+                        },
                       ),
                     ),
                     if (_selectedIndex != null && _selectedIndex! < widget.points.length)
@@ -185,15 +221,36 @@ class _ProjectionChartState extends State<ProjectionChart> {
             ),
             const SizedBox(height: 4),
             Text(
-              '총 자산: ${formatCurrency(point.total)}',
+              '총 자산(배당 재투자): ${formatCurrency(point.total)}',
               style: TextStyle(
                 fontWeight: FontWeight.w900,
                 fontSize: 13,
                 color: primaryColor,
               ),
             ),
+            if (point.total > point.simpleTotal) ...[
+              const SizedBox(height: 2),
+              Text(
+                '배당 미재투자 시: ${formatCurrency(point.simpleTotal)}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? const Color(0xFFE2A03F) : const Color(0xFFD97706),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '재투자로 얻은 추가수익: +${formatCurrency(point.total - point.simpleTotal)}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? const Color(0xFF34D399) : const Color(0xFF059669),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+            const SizedBox(height: 4),
             Text(
-              '원금: ${formatCurrency(point.cumulativeContribution)}',
+              '누적 원금: ${formatCurrency(point.cumulativeContribution)}',
               style: TextStyle(
                 fontSize: 11,
                 color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -207,12 +264,13 @@ class _ProjectionChartState extends State<ProjectionChart> {
 }
 
 class ProjectionChartPainter extends CustomPainter {
-  ProjectionChartPainter(this.points, this.primaryColor, this.isDark, this.selectedIndex);
+  ProjectionChartPainter(this.points, this.primaryColor, this.isDark, this.selectedIndex, this.animationValue);
 
   final List<ProjectionPoint> points;
   final Color primaryColor;
   final bool isDark;
   final int? selectedIndex;
+  final double animationValue;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -279,12 +337,17 @@ class ProjectionChartPainter extends CustomPainter {
       );
     }
 
-    // 곡선 경로 및 그라데이션 채우기
+    // 곡선 경로 및 그라데이션 채우기 (배당 재투자 - 복리)
     final path = Path();
     final fillPath = Path();
+    
+    // 단리 경로 (배당 비재투자)
+    final simplePath = Path();
 
     final firstPt = mapPoint(points[0], 0);
     path.moveTo(firstPt.dx, firstPt.dy);
+    simplePath.moveTo(firstPt.dx, padding.top + chartHeight - ((points[0].simpleTotal - effectiveMinY) / rangeY * chartHeight));
+    
     fillPath.moveTo(firstPt.dx, padding.top + chartHeight);
     fillPath.lineTo(firstPt.dx, firstPt.dy);
 
@@ -292,31 +355,55 @@ class ProjectionChartPainter extends CustomPainter {
       final pt = mapPoint(points[i], i);
       final prevPt = mapPoint(points[i - 1], i - 1);
       final midX = (prevPt.dx + pt.dx) / 2;
+      
+      // 복리 곡선
       path.cubicTo(midX, prevPt.dy, midX, pt.dy, pt.dx, pt.dy);
       fillPath.cubicTo(midX, prevPt.dy, midX, pt.dy, pt.dx, pt.dy);
+      
+      // 단리 곡선
+      final sPt = Offset(pt.dx, padding.top + chartHeight - ((points[i].simpleTotal - effectiveMinY) / rangeY * chartHeight));
+      final sPrevPt = Offset(prevPt.dx, padding.top + chartHeight - ((points[i - 1].simpleTotal - effectiveMinY) / rangeY * chartHeight));
+      simplePath.cubicTo(midX, sPrevPt.dy, midX, sPt.dy, sPt.dx, sPt.dy);
     }
 
     final lastPt = mapPoint(points.last, points.length - 1);
     fillPath.lineTo(lastPt.dx, padding.top + chartHeight);
     fillPath.close();
 
+    // 애니메이션 적용 (가로로 서서히 나타나는 효과)
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(padding.left, 0, chartWidth * animationValue, size.height));
+
+    // 복리 그라데이션 영역
     final fillPaint = Paint()
       ..shader = ui.Gradient.linear(
         Offset(0, padding.top),
         Offset(0, padding.top + chartHeight),
         [
-          primaryColor.withValues(alpha: isDark ? 0.25 : 0.15),
+          primaryColor.withValues(alpha: isDark ? 0.35 : 0.2),
           primaryColor.withValues(alpha: 0.0),
         ],
       );
     canvas.drawPath(fillPath, fillPaint);
 
+    // 복리 선 (굵게)
     final linePaint = Paint()
       ..color = primaryColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
+      ..strokeWidth = 3.0
       ..strokeCap = StrokeCap.round;
     canvas.drawPath(path, linePaint);
+    
+    // 단리 선 (점선 효과 등을 위해 얇고 다른 색상)
+    final simpleLinePaint = Paint()
+      ..color = isDark ? const Color(0xFFE2A03F) : const Color(0xFFD97706)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+    
+    canvas.drawPath(simplePath, simpleLinePaint);
+
+    canvas.restore();
 
     // 터치/선택된 인덱스 하이라이트
     if (selectedIndex != null && selectedIndex! < points.length) {
@@ -352,6 +439,8 @@ class ProjectionChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant ProjectionChartPainter oldDelegate) {
-    return oldDelegate.points != points || oldDelegate.selectedIndex != selectedIndex;
+    return oldDelegate.points != points || 
+           oldDelegate.selectedIndex != selectedIndex ||
+           oldDelegate.animationValue != animationValue;
   }
 }

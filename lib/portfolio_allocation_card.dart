@@ -36,8 +36,7 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.holdings.isEmpty) return const SizedBox.shrink();
-
+    final isEmpty = widget.holdings.isEmpty;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
@@ -91,20 +90,34 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
 
     final total = values.fold<double>(0, (sum, val) => sum + val);
     final displayData = <_AllocationItem>[];
-    for (int i = 0; i < categories.length; i++) {
-      if (values[i] > 0) {
-        final percent = total > 0 ? (values[i] / total) * 100 : 0.0;
+
+    if (isEmpty) {
+      for (int i = 0; i < categories.length; i++) {
         displayData.add(
           _AllocationItem(
             label: categories[i],
-            value: values[i],
-            percent: percent,
+            value: 0.0,
+            percent: 0.0,
             color: colors[i],
           ),
         );
       }
+    } else {
+      for (int i = 0; i < categories.length; i++) {
+        if (values[i] > 0) {
+          final percent = total > 0 ? (values[i] / total) * 100 : 0.0;
+          displayData.add(
+            _AllocationItem(
+              label: categories[i],
+              value: values[i],
+              percent: percent,
+              color: colors[i],
+            ),
+          );
+        }
+      }
+      displayData.sort((a, b) => b.value.compareTo(a.value));
     }
-    displayData.sort((a, b) => b.value.compareTo(a.value));
 
     final topItem = displayData.isNotEmpty ? displayData.first : null;
 
@@ -208,7 +221,27 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
                         strokeWidth: 11,
                       ),
                     ),
-                    if (topItem != null)
+                    if (isEmpty)
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.pie_chart_outline_rounded,
+                            size: 24,
+                            color: isDark ? Colors.grey[500] : const Color(0xFF9E9689),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '0%',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                            ),
+                          ),
+                        ],
+                      )
+                    else if (topItem != null)
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -272,7 +305,7 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                             decoration: BoxDecoration(
-                              color: item.color.withValues(alpha: 0.12),
+                              color: item.color.withValues(alpha: isEmpty ? 0.08 : 0.12),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -280,7 +313,9 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
-                                color: item.color,
+                                color: isEmpty
+                                    ? (isDark ? Colors.grey[400] : const Color(0xFF7A7265))
+                                    : item.color,
                               ),
                             ),
                           ),
@@ -301,6 +336,41 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
               ),
             ],
           ),
+          if (isEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF262626) : const Color(0xFFF7F5F0),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF383838) : const Color(0xFFEBE6DD),
+                  width: 0.7,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.lightbulb_outline_rounded,
+                    size: 14,
+                    color: isDark ? const Color(0xFF34D399) : primaryColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '자산을 등록하시면 자산군 및 계좌별 투자 비중이 자동 분석됩니다.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

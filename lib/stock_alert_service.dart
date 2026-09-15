@@ -17,19 +17,7 @@ const String kNotificationChannelDesc = '보유 종목의 큰 가격 변동과 �
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
-    try {
-      await Hive.initFlutter();
-      final storage = StorageService();
-      await storage.init();
-
-      if (!storage.stockAlertEnabled) {
-        return Future.value(true);
-      }
-
-      await StockAlertService.checkAndNotify(storage);
-    } catch (e) {
-      debugPrint('[Workmanager] Error executing stock alert task: $e');
-    }
+    // 푸시 알림 비활성화 상태: 작업을 실행하지 않고 즉시 완료 반환
     return Future.value(true);
   });
 }
@@ -65,25 +53,11 @@ class StockAlertService {
         },
       );
 
-      // Android 13+ 알림 권한 요청
-      if (Platform.isAndroid) {
-        final androidImplementation = _notificationsPlugin
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>();
-        await androidImplementation?.requestNotificationsPermission();
-      }
-
       _isInitialized = true;
 
-      // 2. Workmanager 백그라운드 작업 등록
+      // 2. Workmanager 주기적 작업 취소 (알림 비활성화 보장)
       if (Platform.isAndroid) {
-        await Workmanager().initialize(
-          callbackDispatcher,
-        );
-
-        if (storage.stockAlertEnabled) {
-          await schedulePeriodicAlertTask();
-        }
+        await cancelPeriodicAlertTask();
       }
     } catch (e) {
       debugPrint('Failed to initialize StockAlertService: $e');
@@ -122,6 +96,9 @@ class StockAlertService {
 
   /// 보유 종목 시세를 스캔하고 급등/급락 발생 시 알림 발송
   static Future<int> checkAndNotify(StorageService storage) async {
+    // 푸시 알림 비활성화 상태: 알림 미발송
+    if (!storage.stockAlertEnabled) return 0;
+
     final holdings = storage.loadHoldings();
     if (holdings.isEmpty) return 0;
 

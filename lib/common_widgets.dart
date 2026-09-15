@@ -4,7 +4,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'models.dart';
-import 'stock_alert_service.dart';
 import 'portfolio_news_carousel.dart';
 
 late final ValueNotifier<ThemeMode> themeNotifier;
@@ -42,7 +41,6 @@ void openSettingsSheet(
       builder: (context, setSheetState) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final primaryColor = Theme.of(context).colorScheme.primary;
-        final isEnabled = storage.stockAlertEnabled;
 
         return Container(
           decoration: BoxDecoration(
@@ -89,7 +87,7 @@ void openSettingsSheet(
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '설정 및 데이터 관리',
+                    '데이터 관리 및 백업',
                     style: TextStyle(
                       fontSize: 19,
                       fontWeight: FontWeight.w800,
@@ -334,134 +332,7 @@ void openSettingsSheet(
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-
-              // ── 2. 메인 시세 알림 스위치 카드 ──
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF242424) : const Color(0xFFF9F7F3),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
-                    width: 0.8,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    '보유 종목 급등/급락 알림',
-                                    style: TextStyle(
-                                      fontSize: 14.5,
-                                      fontWeight: FontWeight.w800,
-                                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                                      letterSpacing: -0.3,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: isEnabled
-                                          ? (isDark ? const Color(0xFF1E3A33) : const Color(0xFFE8F5F1))
-                                          : (isDark ? const Color(0xFF333333) : const Color(0xFFECE7DF)),
-                                      borderRadius: BorderRadius.circular(5),
-                                    ),
-                                    child: Text(
-                                      isEnabled ? 'ON' : 'OFF',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
-                                        color: isEnabled ? primaryColor : (isDark ? Colors.grey[400] : const Color(0xFF8C847A)),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '보유 중인 종목의 5% 이상 가격 변동 소식을 종목당 하루 1회 푸시로 받습니다.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Switch.adaptive(
-                          value: isEnabled,
-                          activeTrackColor: primaryColor,
-                          onChanged: (val) async {
-                            setSheetState(() => storage.stockAlertEnabled = val);
-                            if (val) {
-                              await StockAlertService.schedulePeriodicAlertTask();
-                            } else {
-                              await StockAlertService.cancelPeriodicAlertTask();
-                            }
-                            onNotificationChanged?.call();
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Divider(
-                      height: 1,
-                      color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '푸시 알림 수신 여부 즉시 확인',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
-                            ),
-                          ),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () async {
-                            final sent = await StockAlertService.sendTestNotification(storage: storage);
-                            if (context.mounted && sent) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('🔔 테스트 알림이 발송되었습니다! 상단 알림바를 확인해보세요.'),
-                                  backgroundColor: Color(0xFF176B5B),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
-                          },
-                          icon: const Icon(Icons.notifications_active_outlined, size: 15),
-                          label: const Text('테스트 알림'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: primaryColor,
-                            side: BorderSide(color: primaryColor.withValues(alpha: 0.4)),
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               // ── 닫기 버튼 ──
               SizedBox(

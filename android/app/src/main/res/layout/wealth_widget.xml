@@ -1,44 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
-    android:orientation="vertical"
+    android:background="@drawable/widget_bg_dark"
+    android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="16dp">
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
 
-    <TextView
-        android:id="@+id/widget_title"
-        android:layout_width="match_parent"
+    <!-- 좌측: 자산 타이틀 및 총 자산 금액 -->
+    <LinearLayout
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="내 자산 현황"
-        android:textColor="#85A39B"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
 
-    <TextView
-        android:id="@+id/widget_total_wealth"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="₩ 0"
-        android:textColor="#FFFFFF"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:autoSizeTextType="uniform"
-        android:autoSizeMinTextSize="12sp"
-        android:autoSizeMaxTextSize="28sp"
-        android:autoSizeStepGranularity="1sp"
-        android:maxLines="1" />
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="내 자산 현황"
+            android:textColor="#85A39B"
+            android:textSize="11sp"
+            android:textStyle="bold" />
 
+        <TextView
+            android:id="@+id/widget_total_wealth"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="₩ 0"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="12sp"
+            android:autoSizeMaxTextSize="22sp"
+            android:autoSizeStepGranularity="1sp" />
+    </LinearLayout>
+
+    <!-- 우측: 은퇴 달성률 뱃지 -->
     <TextView
         android:id="@+id/widget_percent"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginStart="10dp"
+        android:background="@drawable/widget_badge_bg_dark"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
         android:text="은퇴 달성률 0.0%"
         android:textColor="#34D399"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+        android:textSize="11.5sp"
+        android:textStyle="bold"
+        android:maxLines="1" />
 
 </LinearLayout>

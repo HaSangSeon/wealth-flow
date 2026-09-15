@@ -196,6 +196,7 @@ class Holding {
 /// 시뮬레이션 설정
 class SimulationSettings {
   double annualReturn;
+  double dividendYield;
   double monthlyContribution;
   double contributionGrowth;
   int years;
@@ -204,6 +205,7 @@ class SimulationSettings {
 
   SimulationSettings({
     this.annualReturn = 7,
+    this.dividendYield = 3,
     this.monthlyContribution = 1000000,
     this.contributionGrowth = 3,
     this.years = 15,
@@ -213,6 +215,7 @@ class SimulationSettings {
 
   Map<String, dynamic> toJson() => {
         'annualReturn': annualReturn,
+        'dividendYield': dividendYield,
         'monthlyContribution': monthlyContribution,
         'contributionGrowth': contributionGrowth,
         'years': years,
@@ -223,6 +226,7 @@ class SimulationSettings {
   factory SimulationSettings.fromJson(Map<String, dynamic> json) =>
       SimulationSettings(
         annualReturn: (json['annualReturn'] as num?)?.toDouble() ?? 7.0,
+        dividendYield: (json['dividendYield'] as num?)?.toDouble() ?? 3.0,
         monthlyContribution: (json['monthlyContribution'] as num?)?.toDouble() ?? 1000000.0,
         contributionGrowth: (json['contributionGrowth'] as num?)?.toDouble() ?? 3.0,
         years: json['years'] as int? ?? 15,
@@ -273,12 +277,14 @@ class ProjectionPoint {
   const ProjectionPoint({
     required this.year,
     required this.total,
+    required this.simpleTotal,
     required this.contribution,
     required this.cumulativeContribution,
   });
 
   final int year;
   final double total;
+  final double simpleTotal;
   final double contribution;
   final double cumulativeContribution;
 }
@@ -288,45 +294,57 @@ List<ProjectionPoint> calculateProjectionPoints({
   required double initialAsset,
   required double monthlyContribution,
   required double annualReturnPercent,
+  required double dividendYieldPercent,
   required double contributionGrowthPercent,
   required int years,
 }) {
   var total = initialAsset;
+  var simpleTotal = initialAsset;
+  var simpleInterestAccumulated = 0.0;
   var monthly = monthlyContribution;
   var cumulativeContrib = 0.0;
   final points = <ProjectionPoint>[
     ProjectionPoint(
       year: 0,
       total: total,
+      simpleTotal: total,
       contribution: 0,
       cumulativeContribution: 0,
     ),
   ];
 
   final r = annualReturnPercent / 100.0;
-  // 월 실효 수익률 rm = (1 + r)^(1/12) - 1
-  // 음수 수익률 대비: 1 + r > 0 인 경우 거듭제곱 사용, 아닐 경우 r / 12
-  final monthlyRate = (1.0 + r > 0)
+  final d = dividendYieldPercent / 100.0;
+  
+  // 주가성장률 월 실효수익률
+  final monthlyCapitalRate = (1.0 + r > 0)
       ? (math.pow(1.0 + r, 1.0 / 12.0).toDouble() - 1.0)
       : (r / 12.0);
+  
+  // 배당수익률 월 지급률 (단리로 균등하게 지급된다고 가정)
+  final monthlyDividendRate = d / 12.0;
 
   for (var year = 1; year <= years; year++) {
     final annualContribution = monthly * 12.0;
     cumulativeContrib += annualContribution;
 
-    if (annualReturnPercent == 0) {
-      total += annualContribution;
-    } else {
-      // 12개월 동안 매월 초 적립 + 월복리 운용
-      for (var m = 0; m < 12; m++) {
-        total = (total + monthly) * (1.0 + monthlyRate);
-      }
+    // 12개월 동안 매월 초 적립
+    for (var m = 0; m < 12; m++) {
+      // 복리 자산: (현재자산 + 이번달적립금) * (1 + 주가성장률 + 배당수익률)
+      total = (total + monthly) * (1.0 + monthlyCapitalRate + monthlyDividendRate);
+      
+      // 단리 자산 (배당 미재투자): 주가성장률만 반영
+      simpleTotal = (simpleTotal + monthly) * (1.0 + monthlyCapitalRate);
+      
+      // 이번 달 발생한 배당금 (이전 달까지의 단리 자산 기준)
+      simpleInterestAccumulated += simpleTotal * monthlyDividendRate;
     }
 
     points.add(
       ProjectionPoint(
         year: year,
         total: total,
+        simpleTotal: simpleTotal + simpleInterestAccumulated,
         contribution: annualContribution,
         cumulativeContribution: cumulativeContrib,
       ),
@@ -343,6 +361,7 @@ double calculateCompoundFutureValue({
   required double initialAsset,
   required double monthlyContribution,
   required double annualReturnPercent,
+  required double dividendYieldPercent,
   required double contributionGrowthPercent,
   required int years,
 }) {
@@ -351,6 +370,7 @@ double calculateCompoundFutureValue({
     initialAsset: initialAsset,
     monthlyContribution: monthlyContribution,
     annualReturnPercent: annualReturnPercent,
+    dividendYieldPercent: dividendYieldPercent,
     contributionGrowthPercent: contributionGrowthPercent,
     years: years,
   );
@@ -541,8 +561,8 @@ class StorageService {
   static const _stockAlertEnabledKey = 'stock_alert_enabled';
   static const _stockAlertThresholdKey = 'stock_alert_threshold';
 
-  /// 보유 종목 급등/급락 알림 활성화 여부
-  bool get stockAlertEnabled => _box.get(_stockAlertEnabledKey, defaultValue: true) as bool;
+  /// 보유 종목 급등/급락 알림 활성화 여부 (현재 푸시 알림 비활성화)
+  bool get stockAlertEnabled => _box.get(_stockAlertEnabledKey, defaultValue: false) as bool;
 
   set stockAlertEnabled(bool value) => _box.put(_stockAlertEnabledKey, value);
 

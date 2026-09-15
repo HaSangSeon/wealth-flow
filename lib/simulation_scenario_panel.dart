@@ -5,20 +5,24 @@ class ScenarioPanel extends StatelessWidget {
   const ScenarioPanel({
     super.key,
     required this.annualReturn,
+    required this.dividendYield,
     required this.monthlyContribution,
     required this.contributionGrowth,
     required this.years,
     required this.onAnnualReturnChanged,
+    required this.onDividendYieldChanged,
     required this.onMonthlyContributionChanged,
     required this.onContributionGrowthChanged,
     required this.onYearsChanged,
   });
 
   final double annualReturn;
+  final double dividendYield;
   final double monthlyContribution;
   final double contributionGrowth;
   final int years;
   final ValueChanged<double> onAnnualReturnChanged;
+  final ValueChanged<double> onDividendYieldChanged;
   final ValueChanged<double> onMonthlyContributionChanged;
   final ValueChanged<double> onContributionGrowthChanged;
   final ValueChanged<int> onYearsChanged;
@@ -96,14 +100,24 @@ class ScenarioPanel extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           SliderField(
-            label: '연평균 수익률',
+            label: '연평균 주가성장(시세차익)',
             valueLabel: '${annualReturn.toStringAsFixed(1)}%',
             value: annualReturn,
             min: -10,
             max: 20,
             divisions: 60,
             onChanged: onAnnualReturnChanged,
-            helpText: '자산이 매년 굴러가며 창출하는 평균 수익률입니다.\n\n물가상승률(인플레이션)을 감안한 실질 수익률을 입력하시면 더욱 정교한 시뮬레이션 결과를 볼 수 있습니다.',
+            helpText: '보유 자산의 매매 가격(시세)이 1년 동안 상승/하락하는 평균 비율입니다.\n\n물가상승률(인플레이션)을 감안한 실질 주가 상승률을 입력하시면 더욱 정교한 시뮬레이션 결과를 볼 수 있습니다.',
+          ),
+          SliderField(
+            label: '연평균 배당수익률',
+            valueLabel: '${dividendYield.toStringAsFixed(1)}%',
+            value: dividendYield,
+            min: 0,
+            max: 15,
+            divisions: 30,
+            onChanged: onDividendYieldChanged,
+            helpText: '자산에서 매년 발생하는 배당금(분배금, 이자 등)의 비율입니다.\n\n이 금액은 단리 차트에서는 "현금"으로 누적되며, 복리 차트에서는 매번 "재투자"되는 것으로 계산됩니다.\n(성장주 등 배당이 없는 자산이라면 0%로 설정하세요.)',
           ),
           SliderField(
             label: '월 추가 투자금',

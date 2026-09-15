@@ -35,18 +35,14 @@ class PortfolioNewsCarouselState extends State<PortfolioNewsCarousel> {
 
   Future<void> fetchNews() async {
     setState(() => _isLoading = true);
-    if (widget.holdings.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _newsItems = [];
-        });
-      }
-      return;
-    }
-
     final service = YahooFinanceService();
-    final news = await service.fetchPortfolioNews(widget.holdings);
+    final List<Map<String, dynamic>> news;
+    if (widget.holdings.isEmpty) {
+      // 등록된 자산이 없을 때는 국내/해외 대표 시장(코스피, S&P 500) 시황 뉴스를 제공합니다
+      news = await service.fetchPortfolioNews(['코스피', 'S&P 500']);
+    } else {
+      news = await service.fetchPortfolioNews(widget.holdings);
+    }
 
     if (mounted) {
       setState(() {
@@ -66,8 +62,6 @@ class PortfolioNewsCarouselState extends State<PortfolioNewsCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isLoading && _newsItems.isEmpty) return const SizedBox.shrink();
-
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
@@ -121,9 +115,9 @@ class PortfolioNewsCarouselState extends State<PortfolioNewsCarousel> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
-                      '오늘의 종목 브리핑',
-                      style: TextStyle(
+                    Text(
+                      widget.holdings.isEmpty ? '오늘의 증시 브리핑' : '오늘의 종목 브리핑',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.3,
@@ -186,9 +180,64 @@ class PortfolioNewsCarouselState extends State<PortfolioNewsCarousel> {
           const SizedBox(height: 14),
 
           // ── 카드 내부 가로 뉴스 캐러셀 ──
-          SizedBox(
-            height: 126,
-            child: _isLoading
+          if (!_isLoading && _newsItems.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF262626) : const Color(0xFFF9F7F3),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF383838) : const Color(0xFFE5E0D7),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.newspaper_rounded,
+                      size: 20,
+                      color: primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '보유 종목 맞춤 브리핑',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '자산을 등록하시면 보유 종목의 실시간 시황과 배당 공시가 자동으로 모입니다.',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            SizedBox(
+              height: 126,
+              child: _isLoading
                 ? ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: 2,

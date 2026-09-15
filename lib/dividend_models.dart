@@ -35,6 +35,7 @@ class StockDividendSummary {
   final List<int> paymentMonths;
   final String frequencyLabel;
   final List<UpcomingDividend> dividends;
+  final double? dividendGrowthRate;
 
   StockDividendSummary({
     required this.name,
@@ -45,6 +46,7 @@ class StockDividendSummary {
     required this.paymentMonths,
     required this.frequencyLabel,
     required this.dividends,
+    this.dividendGrowthRate,
   });
 }
 
@@ -55,12 +57,17 @@ class DividendCalculationResult {
   final List<UpcomingDividend> allDividends;
   final List<StockDividendSummary> stockSummaries;
 
+  final double taxableGrossAnnualTotal;
+  final double taxFreeGrossAnnualTotal;
+
   DividendCalculationResult({
     required this.monthlyDividends,
     required this.annualTotal,
     required this.totalStockValuation,
     required this.allDividends,
     required this.stockSummaries,
+    this.taxableGrossAnnualTotal = 0.0,
+    this.taxFreeGrossAnnualTotal = 0.0,
   });
 }
 
@@ -72,6 +79,8 @@ DividendCalculationResult calculateDividendData({
   final Map<int, double> monthlyDividends = {for (var i = 1; i <= 12; i++) i: 0.0};
   double annualTotal = 0.0;
   double totalStockValuation = 0.0;
+  double taxableGrossAnnualTotal = 0.0;
+  double taxFreeGrossAnnualTotal = 0.0;
   
   final List<UpcomingDividend> allDividends = [];
   final List<StockDividendSummary> stockSummaries = [];
@@ -292,6 +301,23 @@ DividendCalculationResult calculateDividendData({
     final latestDiv = sortedDivs.first;
     final latestExDate = DateTime.fromMillisecondsSinceEpoch((latestDiv['date'] as int) * 1000);
     final double latestAmount = (latestDiv['amount'] as num).toDouble();
+    
+    // 배당 성장률(Dividend Growth Rate) 계산
+    double? growthRate;
+    if (sortedDivs.length >= 2) {
+      final double prevAmount = (sortedDivs[1]['amount'] as num).toDouble();
+      // 이전 배당금보다 0.1% 이상 올랐을 때만 성장으로 판단 (미세한 환율/반올림 오차 방지)
+      if (prevAmount > 0 && latestAmount > prevAmount * 1.001) {
+        growthRate = ((latestAmount - prevAmount) / prevAmount) * 100;
+      }
+    }
+
+    final double grossAnnualForStock = h.quantity * latestAmount * frequencyCount * exchangeRate;
+    if (h.account == AccountType.general) {
+      taxableGrossAnnualTotal += grossAnnualForStock;
+    } else {
+      taxFreeGrossAnnualTotal += grossAnnualForStock;
+    }
 
     // ── 1. 야후 파이낸스 실 공시 배당 분류 ──
     final List<UpcomingDividend> pastStockDividends = [];
@@ -410,6 +436,7 @@ DividendCalculationResult calculateDividendData({
         paymentMonths: monthsList,
         frequencyLabel: freqLabel,
         dividends: combinedDividends,
+        dividendGrowthRate: growthRate,
       ));
     }
   }
@@ -423,6 +450,8 @@ DividendCalculationResult calculateDividendData({
     totalStockValuation: totalStockValuation,
     allDividends: allDividends,
     stockSummaries: stockSummaries,
+    taxableGrossAnnualTotal: taxableGrossAnnualTotal,
+    taxFreeGrossAnnualTotal: taxFreeGrossAnnualTotal,
   );
 }
 

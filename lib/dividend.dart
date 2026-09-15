@@ -7,6 +7,8 @@ import 'dividend_models.dart';
 import 'dividend_chart.dart';
 import 'dividend_stock_list.dart';
 import 'dividend_calendar.dart';
+import 'dividend_ticker.dart';
+import 'dividend_tax_safety_card.dart';
 
 export 'dividend_models.dart';
 export 'dividend_chart.dart';
@@ -215,6 +217,11 @@ class _DividendTabState extends State<DividendTab> {
                             monthlyDividends: data.monthlyDividends,
                             selectedMonth: _selectedMonth,
                             onMonthSelected: (m) => setState(() => _selectedMonth = m),
+                          ),
+                          const SizedBox(height: 16),
+                          DividendTaxSafetyCard(
+                            taxableGrossAnnualTotal: data.taxableGrossAnnualTotal,
+                            taxFreeGrossAnnualTotal: data.taxFreeGrossAnnualTotal,
                           ),
                           const SizedBox(height: 16),
                           DividendPortfolioList(

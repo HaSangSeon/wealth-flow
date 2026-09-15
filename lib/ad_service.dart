@@ -10,6 +10,7 @@ class AdService {
   static bool _isAdLoading = false;
   static DateTime? _lastShownTime;
   static const Duration _coolDownDuration = Duration(minutes: 3);
+  static int _actionCount = 0;
 
   static Future<void> initialize() async {
     if (_initialized) return;
@@ -88,11 +89,21 @@ class AdService {
     );
   }
 
-  /// Show interstitial ad with a 3-minute cool-down guarantee
+  /// Show interstitial ad with a 3-action counter and 3-minute cool-down guarantee
   static void showInterstitialAd({VoidCallback? onDismissed}) {
+    _actionCount++;
+    debugPrint("[AdService] 자산 작업 카운트: $_actionCount회 (3회 누적 시 노출)");
+
+    // 1. 3회 누적 확인 (1, 2회차는 광고 없이 통과)
+    if (_actionCount % 3 != 0) {
+      debugPrint("[AdService] 누적 3회 전이므로 광고 노출 스킵 (현재 $_actionCount회).");
+      onDismissed?.call();
+      return;
+    }
+
     final now = DateTime.now();
 
-    // 1. 쿨다운 검사 (3분 제한)
+    // 2. 쿨다운 검사 (3분 제한)
     if (_lastShownTime != null && now.difference(_lastShownTime!) < _coolDownDuration) {
       final remaining = _coolDownDuration - now.difference(_lastShownTime!);
       debugPrint("[AdService] 전면광고 쿨다운 중 (${remaining.inSeconds}초 남음). 광고 노출 스킵.");

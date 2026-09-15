@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dividend_models.dart';
+import 'dividend_ticker.dart';
 
 class DividendSummaryHeader extends StatelessWidget {
   const DividendSummaryHeader({
@@ -207,6 +208,8 @@ class DividendSummaryHeader extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 8),
+          DailyDividendTicker(annualTotal: annualTotal),
         ],
       ),
     );

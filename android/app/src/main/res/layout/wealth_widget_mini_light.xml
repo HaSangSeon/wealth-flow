@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_mini_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg_light"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="14dp">
+
+    <!-- 상단: 라벨 -->
+    <TextView
+        android:id="@+id/widget_mini_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="내 자산 현황"
+        android:textColor="#5A6E67"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+    <!-- 중앙: 총 자산 금액 -->
+    <TextView
+        android:id="@+id/widget_mini_total_wealth"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="8dp"
+        android:gravity="center"
+        android:text="₩ 0"
+        android:textColor="#17201D"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="11sp"
+        android:autoSizeMaxTextSize="20sp"
+        android:autoSizeStepGranularity="1sp" />
+
+    <!-- 하단: 은퇴 달성률 뱃지 -->
+    <TextView
+        android:id="@+id/widget_mini_percent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/widget_badge_bg_light"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:text="달성률 0.0%"
+        android:textColor="#0F766E"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:maxLines="1" />
+
+</LinearLayout>

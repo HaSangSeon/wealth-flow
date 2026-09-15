@@ -8,6 +8,7 @@ class GoalPlannerView extends StatelessWidget {
     required this.targetAmount,
     required this.targetYears,
     required this.annualReturn,
+    required this.dividendYield,
     required this.monthlyContribution,
     required this.contributionGrowth,
     required this.onTargetAmountChanged,
@@ -20,6 +21,7 @@ class GoalPlannerView extends StatelessWidget {
   final double targetAmount;
   final int targetYears;
   final double annualReturn;
+  final double dividendYield;
   final double monthlyContribution;
   final double contributionGrowth;
   final ValueChanged<double> onTargetAmountChanged;
@@ -27,19 +29,30 @@ class GoalPlannerView extends StatelessWidget {
   final ValueChanged<double> onMonthlyContributionChanged;
   final ValueChanged<double> onAnnualReturnChanged;
 
+  String _formatWithComma(num n) {
+    return n.round().toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]},',
+    );
+  }
+
   String _formatKoreanAmount(double amount) {
     if (amount >= 100000000) {
       final double eok = amount / 100000000;
       final int eokInt = eok.floor();
       final double man = (amount % 100000000) / 10000;
-      if (man > 0) {
-        return '$eokInt억 ${man.round()}만 원';
+      final int manRound = man.round();
+      final eokStr = _formatWithComma(eokInt);
+      if (manRound > 0) {
+        return '$eokStr억 ${_formatWithComma(manRound)}만 원';
       } else {
-        return '$eokInt억 원';
+        return '$eokStr억 원';
       }
-    } else {
+    } else if (amount >= 10000) {
       final double man = amount / 10000;
-      return '${man.round()}만 원';
+      return '${_formatWithComma(man)}만 원';
+    } else {
+      return '${_formatWithComma(amount)}원';
     }
   }
 
@@ -48,6 +61,7 @@ class GoalPlannerView extends StatelessWidget {
       initialAsset: start,
       monthlyContribution: monthly,
       annualReturnPercent: rate,
+      dividendYieldPercent: dividendYield,
       contributionGrowthPercent: growth,
       years: yearsCount,
     );
@@ -145,6 +159,7 @@ class GoalPlannerView extends StatelessWidget {
         GoalProgressGauge(
           currentValue: currentValue,
           targetAmount: targetAmount,
+          annualReturn: annualReturn,
           isDark: isDark,
         ),
         const SizedBox(height: 16),
@@ -612,28 +627,41 @@ class GoalPlannerView extends StatelessWidget {
 class GoalProgressGauge extends StatelessWidget {
   final double currentValue;
   final double targetAmount;
+  final double annualReturn;
   final bool isDark;
 
   const GoalProgressGauge({
     super.key,
     required this.currentValue,
     required this.targetAmount,
+    required this.annualReturn,
     required this.isDark,
   });
+
+  String _formatWithComma(num n) {
+    return n.round().toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]},',
+    );
+  }
 
   String _formatKoreanAmount(double amount) {
     if (amount >= 100000000) {
       final double eok = amount / 100000000;
       final int eokInt = eok.floor();
       final double man = (amount % 100000000) / 10000;
-      if (man > 0) {
-        return '$eokInt억 ${man.round()}만 원';
+      final int manRound = man.round();
+      final eokStr = _formatWithComma(eokInt);
+      if (manRound > 0) {
+        return '$eokStr억 ${_formatWithComma(manRound)}만 원';
       } else {
-        return '$eokInt억 원';
+        return '$eokStr억 원';
       }
-    } else {
+    } else if (amount >= 10000) {
       final double man = amount / 10000;
-      return '${man.round()}만 원';
+      return '${_formatWithComma(man)}만 원';
+    } else {
+      return '${_formatWithComma(amount)}원';
     }
   }
 
@@ -643,22 +671,74 @@ class GoalProgressGauge extends StatelessWidget {
     final double percent = targetAmount > 0 
         ? (currentValue / targetAmount * 100).clamp(0.0, 100.0) 
         : 0.0;
+        
+    final double currentMonthlyDividend = (currentValue * (annualReturn / 100)) / 12;
+    final double targetMonthlyDividend = (targetAmount * (annualReturn / 100)) / 12;
+
+    ({String title, String desc}) getMilestoneInfo(double monthly) {
+      if (monthly < 10000) {
+        return (
+          title: "커피 한 잔의 여유 ☕️",
+          desc: "매달 배당금으로 소소한 기호식품과 티타임을 즐겨요",
+        );
+      }
+      if (monthly < 50000) {
+        return (
+          title: "OTT 구독료 자립 🍿",
+          desc: "넷플릭스·유튜브 등 월간 고정 구독료를 배당금으로 해결해요",
+        );
+      }
+      if (monthly < 150000) {
+        return (
+          title: "스마트폰 통신비 커버 📱",
+          desc: "매달 나가는 통신요금을 배당금만으로 전액 충당해요",
+        );
+      }
+      if (monthly < 500000) {
+        return (
+          title: "식비 & 교통비 커버 🚌",
+          desc: "일상적인 기본 식비와 대중교통비를 배당금으로 자립했어요",
+        );
+      }
+      if (monthly < 1500000) {
+        return (
+          title: "주거비 & 관리비 커버 🏠",
+          desc: "월세나 관리비·공과금을 배당금으로 해결할 수 있어요",
+        );
+      }
+      if (monthly < 3000000) {
+        return (
+          title: "미니멀 조기 은퇴 🏝️",
+          desc: "기본 생활비가 충당되어 소박한 은퇴(Lean FIRE)가 가능해요",
+        );
+      }
+      return (
+        title: "완벽한 경제적 자유 🚀",
+        desc: "배당 소득만으로 풍요롭고 여유로운 완전 은퇴를 누려요",
+      );
+    }
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: isDark 
+              ? [const Color(0xFF1E1E1E), const Color(0xFF262626)]
+              : [Colors.white, const Color(0xFFF9F9F9)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFE5E0D7),
+          color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
           width: 0.8,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -670,38 +750,38 @@ class GoalProgressGauge extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      Icons.track_changes_rounded,
-                      size: 16,
+                      Icons.local_fire_department_rounded,
+                      size: 20,
                       color: primaryColor,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   const Text(
-                    '은퇴 목표 달성률',
+                    'FIRE 은퇴 시계',
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
                     ),
                   ),
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF1E3A33) : const Color(0xFFE8F5F1),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '${percent.toStringAsFixed(1)}% 달성',
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: isDark ? const Color(0xFF34D399) : primaryColor,
                   ),
@@ -709,16 +789,18 @@ class GoalProgressGauge extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 24),
+          
+          // 게이지와 중앙 텍스트
           SizedBox(
-            width: 130,
-            height: 130,
+            width: 160,
+            height: 160,
             child: Stack(
               children: [
                 Positioned.fill(
                   child: CircularProgressIndicator(
                     value: 1.0,
-                    strokeWidth: 10,
+                    strokeWidth: 14,
                     valueColor: AlwaysStoppedAnimation<Color>(
                       isDark ? const Color(0xFF2C2C2C) : const Color(0xFFECE7DF),
                     ),
@@ -727,12 +809,12 @@ class GoalProgressGauge extends StatelessWidget {
                 Positioned.fill(
                   child: TweenAnimationBuilder<double>(
                     tween: Tween<double>(begin: 0.0, end: percent / 100),
-                    duration: const Duration(milliseconds: 1000),
-                    curve: Curves.easeOut,
+                    duration: const Duration(milliseconds: 1200),
+                    curve: Curves.easeOutCirc,
                     builder: (context, value, child) {
                       return CircularProgressIndicator(
                         value: value,
-                        strokeWidth: 10,
+                        strokeWidth: 14,
                         strokeCap: StrokeCap.round,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           isDark ? const Color(0xFF34D399) : primaryColor,
@@ -746,18 +828,18 @@ class GoalProgressGauge extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        '현재 자산 대비',
+                        '예상 월 배당금',
                         style: TextStyle(
-                          fontSize: 10.5,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Text(
-                        '${percent.toStringAsFixed(1)}%',
+                        _formatKoreanAmount(currentMonthlyDividend),
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
                           color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                           letterSpacing: -0.5,
@@ -769,41 +851,105 @@ class GoalProgressGauge extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF262626) : const Color(0xFFF7F5F0),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '현재 자산 ${_formatKoreanAmount(currentValue)}',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.grey[300] : const Color(0xFF5E574E),
+          
+          const SizedBox(height: 24),
+          
+          // 배당 커버리지 마일스톤 뱃지
+          Builder(
+            builder: (context) {
+              final milestone = getMilestoneInfo(currentMonthlyDividend);
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF222B27) : const Color(0xFFF2F7F4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF33423B) : const Color(0xFFD8E8E0),
+                    width: 0.9,
                   ),
                 ),
-                Text(
-                  ' / ',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.grey[600] : const Color(0xFFCBC5BC),
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(3.5),
+                          decoration: BoxDecoration(
+                            color: (isDark ? const Color(0xFFFFD700) : const Color(0xFFF59E0B))
+                                .withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 13,
+                            color: isDark ? const Color(0xFFFFD700) : const Color(0xFFD97706),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          milestone.title,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF1B3D34),
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      milestone.desc,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        height: 1.35,
+                        color: isDark ? const Color(0xFF98ACA2) : const Color(0xFF4D635A),
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '목표 ${_formatKoreanAmount(targetAmount)}',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? const Color(0xFF34D399) : primaryColor,
-                  ),
+              );
+            },
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // 목표 자산 요약
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '목표 자산 ${_formatKoreanAmount(targetAmount)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.grey[400] : const Color(0xFF6B655D),
                 ),
-              ],
-            ),
+              ),
+              Text(
+                '  |  ',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey[700] : const Color(0xFFD6D1C9),
+                ),
+              ),
+              Text(
+                '목표 월배당 ${_formatKoreanAmount(targetMonthlyDividend)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? const Color(0xFF34D399) : primaryColor,
+                ),
+              ),
+            ],
           ),
         ],
       ),

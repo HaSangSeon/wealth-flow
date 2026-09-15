@@ -39,6 +39,13 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
     _loadSavedSettings();
   }
 
+  @override
+  void didUpdateWidget(covariant PensionTaxTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 프로필 전환 등 부모 위젯 리빌드 시 최신 세팅을 다시 불러오기 위함
+    _loadSavedSettings();
+  }
+
   void _loadSavedSettings() {
     final settings = widget.storage.loadPensionSettings();
     _incomeUnder55 = settings.incomeUnder55;
