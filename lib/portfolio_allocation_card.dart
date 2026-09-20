@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'models.dart';
 import 'formatters.dart';
+import 'common_widgets.dart';
 
 class _AllocationItem {
   final String label;
@@ -167,6 +168,29 @@ class _PortfolioAllocationCardState extends State<PortfolioAllocationCard> {
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      showModernHelpDialog(
+                        context: context,
+                        title: '자산 비중 분석 안내',
+                        badge: '포트폴리오 가이드',
+                        icon: Icons.pie_chart_outline_rounded,
+                        content: '• 자산군별 비중: 주식, ETF, 현금성 자산의 보유 비율을 분석하여 특정 자산군 쏠림 위험을 분산합니다.\n'
+                                 '• 계좌별 비중: 일반 위탁 계좌와 절세 계좌(연금저축/IRP/ISA)의 자산 배분 비중을 한눈에 점검할 수 있습니다.\n'
+                                 '• 균형 있는 투자: 특정 종목의 가격 변동에 흔들리지 않도록 정기적인 리밸런싱 지표로 활용해 보세요.',
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.help_outline_rounded,
+                        size: 15,
+                        color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                      ),
                     ),
                   ),
                 ],

@@ -329,6 +329,8 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                           const SizedBox(height: 18),
                           SliderField(
                             label: '올해 연금저축 납입 예정액',
+                            helpBadge: '연금/절세 가이드',
+                            helpIcon: Icons.savings_outlined,
                             helpText: '💡 연금저축계좌 꿀팁\n\n• 세액공제 한도: 연간 최대 600만 원 (급여 5,500만 원 초과 13.2%, 이하 16.5% 환급)\n• 최고 납입 한도: 연 최대 1,800만 원 (IRP와 합산)\n• 세금 이연 효과: 일반 계좌에서 배당/수익 시 15.4%를 떼지만, 연금계좌는 세금 없이 온전하게 재투자되며 나중에 5.5%로 정산합니다!',
                             valueLabel: formatCurrencyFull(_annualContributionPension),
                             value: _annualContributionPension,
@@ -342,6 +344,8 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                           ),
                           SliderField(
                             label: '올해 IRP 납입 예정액',
+                            helpBadge: '연금/절세 가이드',
+                            helpIcon: Icons.account_balance_outlined,
                             helpText: '💡 IRP (개인형 퇴직연금) 꿀팁\n\n• 세액공제 한도: 연금저축(600) 외에 추가로 300만 원 납입 시 혜택! (연금저축 합산 총 900만 원 세액공제)\n• 투자 제한: 위험자산(주식형) 70%, 안전자산(채권/예금 등) 30% 투자 룰이 있습니다.\n• 혜택: 역시 수익과 배당에 대한 세금을 떼지 않고 과세가 이연됩니다.',
                             valueLabel: formatCurrencyFull(_annualContributionIRP),
                             value: _annualContributionIRP,
@@ -480,6 +484,8 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                           const SizedBox(height: 18),
                           SliderField(
                             label: 'ISA 만기 자금 전환 예정액',
+                            helpBadge: 'ISA 만기 전환 혜택',
+                            helpIcon: Icons.currency_exchange_rounded,
                             helpText: '💡 ISA (개인종합자산관리계좌) 꿀팁\n\n• 비과세 혜택: 손익 통산 후 순이익 기준 200만 원 완전 비과세! 초과 수익은 9.9% 분리과세(정산 요금)로 다른 소득과 합산되지 않습니다.\n• 연금 전환: 3년 의무 가입 후 전액 현금화하여 연금계좌로 이전 가능 (연간 1,800만 원 한도를 다 채웠어도 한도 무관하게 이전됨!)\n• 추가 공제: 전환 금액의 10% (최대 300만 원) 추가 세액공제!\n• 이전 후에는 기존 ISA를 해지하고 같은 계좌로 다시 개설하여 무한 반복 운용이 가능합니다.',
                             valueLabel: formatCurrencyFull(_isaMaturityAmount),
                             value: _isaMaturityAmount,
@@ -617,6 +623,8 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                           ],
                           SliderField(
                             label: '은퇴 시 모인 총 연금 자산',
+                            helpBadge: '연금 인출 가이드',
+                            helpIcon: Icons.account_balance_wallet_outlined,
                             helpText: '💡 55세 이후 연금 인출 꿀팁\n\n• 법정 최소 수령 기간: 세법상 저율 연금소득세(3.3%~5.5%) 혜택을 받으려면 반드시 "최소 10년 이상" 분할 수령해야 합니다.\n• 1,500만 원 한도: 세액공제 받은 원금과 운용수익은 연 1,500만 원 이하 수령 시 저율 연금소득세(3.3%~5.5%)로 종결됩니다.\n• 1,500만 원 초과 시: 초과분은 내 근로/사업 소득과 합산하지 않고, 딱 16.5%만 떼고 끝나는 "16.5% 분리과세"를 선택할 수 있습니다!',
                             valueLabel: formatCurrencyFull(_targetPensionTotal),
                             value: _targetPensionTotal,
@@ -630,6 +638,9 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                           ),
                           SliderField(
                             label: '희망 연금 수령 기간',
+                            helpBadge: '연금 인출 가이드',
+                            helpIcon: Icons.schedule_rounded,
+                            helpText: '• 법정 최소 기간: 저율 연금소득세(3.3%~5.5%) 혜택을 받으려면 법정 10년 이상 분할 수령해야 합니다.\n• 연간 1,500만 원 한도: 1년 수령액이 1,500만 원 이하가 되도록 수령 기간을 넉넉히 설정하시면 절세 혜택이 극대화됩니다.\n• 10년 이후 추가 감면: 연금 수령 11년 차부터는 연금소득세율이 추가로 10% 감면(지방세 포함 3.3% 수준)됩니다.',
                             valueLabel: '$_payoutYears년',
                             value: _payoutYears.toDouble(),
                             min: 5,

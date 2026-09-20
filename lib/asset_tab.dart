@@ -160,9 +160,40 @@ class AssetManagementTab extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                '총 자산',
-                                style: TextStyle(color: Color(0xFFD6E8E4)),
+                              Row(
+                                children: [
+                                  const Text(
+                                    '총 자산',
+                                    style: TextStyle(
+                                      color: Color(0xFFD6E8E4),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () {
+                                      showModernHelpDialog(
+                                        context: context,
+                                        title: '총 자산 산출 기준',
+                                        badge: '내 자산 가이드',
+                                        icon: Icons.account_balance_wallet_outlined,
+                                        content: '• 실시간 시세 합산: 등록된 모든 계좌(일반, ISA, IRP, 연금저축)의 주식, ETF, 현금성 자산을 실시간 평가액으로 합산 집계합니다.\n'
+                                                 '• 실시간 환율 반영: 해외 주식 및 미국 달러(USD) 자산은 야후 파이낸스 실시간 환율을 기준으로 원화 환산됩니다.\n'
+                                                 '• 안전한 로컬 저장: 사용자의 모든 계좌 및 자산 데이터는 외부 서버에 전송되지 않고 기기 내부에 암호화 보관됩니다.',
+                                      );
+                                    },
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(4),
+                                      child: Icon(
+                                        Icons.help_outline_rounded,
+                                        size: 15,
+                                        color: Color(0xFFD6E8E4),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 6),
                               FittedBox(
@@ -292,33 +323,33 @@ class AssetManagementTab extends StatelessWidget {
                               Row(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.all(6),
+                                    padding: const EdgeInsets.all(5),
                                     decoration: BoxDecoration(
                                       color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Icon(
                                       Icons.format_list_bulleted_rounded,
-                                      size: 16,
+                                      size: 15,
                                       color: Theme.of(context).colorScheme.primary,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   const Text(
                                     '자산 목록',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                                    style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800),
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 5),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE8E4DC),
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
                                       '${holdings.length}개',
                                       style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 10.5,
                                         fontWeight: FontWeight.w700,
                                         color: isDark ? Colors.grey[300] : const Color(0xFF5E574E),
                                       ),
@@ -327,18 +358,19 @@ class AssetManagementTab extends StatelessWidget {
                                 ],
                               ),
                               Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
                                     '원화 환산',
                                     style: TextStyle(
-                                      fontSize: 11.5,
+                                      fontSize: 11,
                                       fontWeight: FontWeight.w500,
                                       color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
                                     ),
                                   ),
-                                  const SizedBox(width: 2),
+                                  const SizedBox(width: 1),
                                   SizedBox(
-                                    height: 26,
+                                    height: 24,
                                     child: FittedBox(
                                       fit: BoxFit.scaleDown,
                                       child: Switch(
@@ -348,25 +380,25 @@ class AssetManagementTab extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   InkWell(
                                     onTap: onAdd,
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(7),
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                      padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 4.5),
                                       decoration: BoxDecoration(
                                         color: Theme.of(context).colorScheme.primary,
-                                        borderRadius: BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(7),
                                       ),
                                       child: const Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.add, size: 13, color: Colors.white),
+                                          Icon(Icons.add, size: 12, color: Colors.white),
                                           SizedBox(width: 2),
                                           Text(
                                             '자산 추가',
                                             style: TextStyle(
-                                              fontSize: 11.5,
+                                              fontSize: 11,
                                               fontWeight: FontWeight.w800,
                                               color: Colors.white,
                                             ),
@@ -446,26 +478,6 @@ class AssetManagementTab extends StatelessWidget {
                                             Row(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                                  decoration: BoxDecoration(
-                                                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                                                    borderRadius: BorderRadius.circular(6),
-                                                    border: Border.all(
-                                                      color: isDark ? const Color(0xFF404040) : const Color(0xFFDDD8CE),
-                                                      width: 0.6,
-                                                    ),
-                                                  ),
-                                                  child: Text(
-                                                    holding.account.label,
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.w700,
-                                                      color: isDark ? const Color(0xFF2E9E82) : const Color(0xFF176B5B),
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 8),
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,53 +486,119 @@ class AssetManagementTab extends StatelessWidget {
                                                         holding.name,
                                                         style: TextStyle(
                                                           fontWeight: FontWeight.w800,
-                                                          fontSize: 14.5,
+                                                          fontSize: 15.5,
                                                           color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                                                          letterSpacing: -0.3,
                                                         ),
                                                         maxLines: 1,
                                                         overflow: TextOverflow.ellipsis,
                                                       ),
-                                                      if (holding.symbol != null && holding.symbol!.isNotEmpty) ...[
-                                                        const SizedBox(height: 2),
-                                                        Text(
-                                                          holding.symbol!,
-                                                          style: TextStyle(
-                                                            fontSize: 11,
-                                                            fontWeight: FontWeight.w500,
-                                                            color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                                                      const SizedBox(height: 5),
+                                                      Row(
+                                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                                        children: [
+                                                          if (holding.symbol != null && holding.symbol!.isNotEmpty) ...[
+                                                            Text(
+                                                              holding.symbol!,
+                                                              style: TextStyle(
+                                                                fontSize: 11.5,
+                                                                fontWeight: FontWeight.w500,
+                                                                color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                                                              ),
+                                                            ),
+                                                            const SizedBox(width: 6),
+                                                          ],
+                                                          Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                            decoration: BoxDecoration(
+                                                              color: isDark ? const Color(0xFF2E9E82).withValues(alpha: 0.15) : const Color(0xFF176B5B).withValues(alpha: 0.08),
+                                                              borderRadius: BorderRadius.circular(4),
+                                                              border: Border.all(
+                                                                color: isDark ? const Color(0xFF2E9E82).withValues(alpha: 0.3) : const Color(0xFF176B5B).withValues(alpha: 0.22),
+                                                                width: 0.5,
+                                                             ),
+                                                            ),
+                                                            child: Text(
+                                                              holding.account.label,
+                                                              style: TextStyle(
+                                                                fontSize: 10,
+                                                                fontWeight: FontWeight.w700,
+                                                                color: isDark ? const Color(0xFF2E9E82) : const Color(0xFF176B5B),
+                                                              ),
+                                                            ),
                                                           ),
-                                                        ),
-                                                      ],
+                                                        ],
+                                                      ),
                                                     ],
                                                   ),
                                                 ),
+                                                const SizedBox(width: 8),
                                                 Row(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    if (holding.symbol != null && holding.symbol!.isNotEmpty)
-                                                      IconButton(
-                                                        tooltip: '시세 차트',
-                                                        padding: EdgeInsets.zero,
-                                                        constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                                                        visualDensity: VisualDensity.compact,
-                                                        onPressed: () => _openStockChartSheet(context, holding),
-                                                        icon: const Icon(Icons.show_chart_rounded, size: 18, color: Color(0xFF176B5B)),
+                                                    if (holding.symbol != null && holding.symbol!.isNotEmpty) ...[
+                                                      Material(
+                                                        color: Colors.transparent,
+                                                        child: InkWell(
+                                                          onTap: () => _openStockChartSheet(context, holding),
+                                                          borderRadius: BorderRadius.circular(8),
+                                                          child: Container(
+                                                            width: 30,
+                                                            height: 30,
+                                                            decoration: BoxDecoration(
+                                                              color: isDark ? const Color(0xFF1B3830) : const Color(0xFFE8F5F1),
+                                                              borderRadius: BorderRadius.circular(8),
+                                                            ),
+                                                            child: Icon(
+                                                              Icons.show_chart_rounded,
+                                                              size: 16,
+                                                              color: isDark ? const Color(0xFF38B293) : const Color(0xFF176B5B),
+                                                            ),
+                                                          ),
+                                                        ),
                                                       ),
-                                                    IconButton(
-                                                      tooltip: '수정',
-                                                      padding: EdgeInsets.zero,
-                                                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                                                      visualDensity: VisualDensity.compact,
-                                                      onPressed: () => onEdit(holding),
-                                                      icon: Icon(Icons.edit_outlined, size: 16, color: isDark ? Colors.grey[400] : const Color(0xFF8E867C)),
+                                                      const SizedBox(width: 5),
+                                                    ],
+                                                    Material(
+                                                      color: Colors.transparent,
+                                                      child: InkWell(
+                                                        onTap: () => onEdit(holding),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        child: Container(
+                                                          width: 30,
+                                                          height: 30,
+                                                          decoration: BoxDecoration(
+                                                            color: isDark ? const Color(0xFF2D2D2D) : const Color(0xFFEDE9E0),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.edit_outlined,
+                                                            size: 15,
+                                                            color: isDark ? Colors.grey[300] : const Color(0xFF6E675E),
+                                                          ),
+                                                        ),
+                                                      ),
                                                     ),
-                                                    IconButton(
-                                                      tooltip: '삭제',
-                                                      padding: EdgeInsets.zero,
-                                                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                                                      visualDensity: VisualDensity.compact,
-                                                      onPressed: () => onDelete(holding),
-                                                      icon: const Icon(Icons.delete_outline, size: 16, color: Color(0xFFE57373)),
+                                                    const SizedBox(width: 5),
+                                                    Material(
+                                                      color: Colors.transparent,
+                                                      child: InkWell(
+                                                        onTap: () => onDelete(holding),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        child: Container(
+                                                          width: 30,
+                                                          height: 30,
+                                                          decoration: BoxDecoration(
+                                                            color: isDark ? const Color(0xFF382323) : const Color(0xFFFDECEB),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                          ),
+                                                          child: const Icon(
+                                                            Icons.delete_outline,
+                                                            size: 15,
+                                                            color: Color(0xFFE57373),
+                                                          ),
+                                                        ),
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -535,13 +613,32 @@ class AssetManagementTab extends StatelessWidget {
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     if (holding.type != AssetType.cash) ...[
-                                                      Text(
-                                                        '${formatNumber(holding.quantity)}주 · 주당 ${holding.formatOriginalPrice()}',
-                                                        style: TextStyle(
-                                                          fontSize: 12,
-                                                          fontWeight: FontWeight.w500,
-                                                          color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                                                      Text.rich(
+                                                        TextSpan(
+                                                          children: [
+                                                            TextSpan(
+                                                              text: '${formatNumber(holding.quantity)}주',
+                                                              style: TextStyle(
+                                                                fontWeight: FontWeight.w600,
+                                                                color: isDark ? Colors.grey[300] : const Color(0xFF5A5245),
+                                                              ),
+                                                            ),
+                                                            TextSpan(
+                                                              text: ' · ',
+                                                              style: TextStyle(
+                                                                color: isDark ? Colors.grey[600] : const Color(0xFFB0A89C),
+                                                              ),
+                                                            ),
+                                                            TextSpan(
+                                                              text: holding.formatOriginalPrice(),
+                                                              style: TextStyle(
+                                                                fontWeight: FontWeight.w500,
+                                                                color: isDark ? Colors.grey[500] : const Color(0xFF8E867C),
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
+                                                        style: const TextStyle(fontSize: 12),
                                                       ),
                                                     ] else ...[
                                                       Text(

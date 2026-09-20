@@ -364,17 +364,17 @@ class DividendPortfolioList extends StatelessWidget {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                             decoration: BoxDecoration(
                               color: isDark ? const Color(0xFF2E9E82).withValues(alpha: 0.2) : const Color(0xFFE6F4F1),
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
                                 color: const Color(0xFF2E9E82).withValues(alpha: 0.3),
-                                width: 1,
+                                width: 0.8,
                               ),
                             ),
                             child: Text(
-                              summary.frequencyLabel,
+                              summary.frequencyLabel.replaceAll('배당', ''),
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -382,7 +382,7 @@ class DividendPortfolioList extends StatelessWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: Row(
                               children: [
@@ -391,6 +391,7 @@ class DividendPortfolioList extends StatelessWidget {
                                     summary.name,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
+                                      fontSize: 14,
                                       color: isDark ? Colors.white : Colors.black87,
                                     ),
                                     maxLines: 1,
@@ -398,9 +399,9 @@ class DividendPortfolioList extends StatelessWidget {
                                   ),
                                 ),
                                 if (summary.dividendGrowthRate != null) ...[
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 5),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
                                         colors: isDark 
@@ -423,9 +424,9 @@ class DividendPortfolioList extends StatelessWidget {
                                           size: 11,
                                           color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
                                         ),
-                                        const SizedBox(width: 2.5),
+                                        const SizedBox(width: 2),
                                         Text(
-                                          '배당 인상 +${summary.dividendGrowthRate!.toStringAsFixed(1)}%',
+                                          '인상 +${summary.dividendGrowthRate!.toStringAsFixed(1)}%',
                                           style: TextStyle(
                                             fontSize: 9.5,
                                             fontWeight: FontWeight.w800,
@@ -452,7 +453,7 @@ class DividendPortfolioList extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -461,11 +462,12 @@ class DividendPortfolioList extends StatelessWidget {
                       mainAmountStr,
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
+                        fontSize: 14.5,
                         color: Color(0xFF176B5B),
                       ),
                     ),
                     if (secondaryAmountStr.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 3),
                       Text(
                         secondaryAmountStr,
                         style: const TextStyle(fontSize: 11, color: Colors.grey),

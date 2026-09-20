@@ -5,8 +5,8 @@ import 'package:path_provider/path_provider.dart';
 
 /// 계좌 구분
 enum AccountType {
-  general('일반계좌'),
-  pension('연금저축'),
+  general('일반'),
+  pension('연금'),
   irp('IRP'),
   isa('ISA');
 

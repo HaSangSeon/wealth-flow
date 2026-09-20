@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -465,6 +466,331 @@ class HeaderActionButtons extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── 공통 프리미엄 도움말 다이얼로그 (헤더, 내용, 버튼 통일 디자인) ───
+Future<void> showModernHelpDialog({
+  required BuildContext context,
+  required String title,
+  required String content,
+  String? badge,
+  IconData? icon,
+}) {
+  return showDialog(
+    context: context,
+    barrierDismissible: true,
+    builder: (ctx) => ModernHelpDialog(
+      title: title,
+      content: content,
+      badge: badge,
+      icon: icon,
+    ),
+  );
+}
+
+class ModernHelpDialog extends StatelessWidget {
+  final String title;
+  final String content;
+  final String? badge;
+  final IconData? icon;
+
+  const ModernHelpDialog({
+    super.key,
+    required this.title,
+    required this.content,
+    this.badge,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    // 제목 및 본문 정돈
+    String cleanTitle = title.replaceAll('💡', '').trim();
+    String rawContent = content;
+
+    // 본문 첫 줄에 '💡 ...' 형태의 제목/서브팁이 있는 경우 분리
+    String? headerTip;
+    List<String> rawLines = rawContent.split('\n');
+    if (rawLines.isNotEmpty && rawLines.first.contains('💡')) {
+      headerTip = rawLines.first.replaceAll('💡', '').trim();
+      rawContent = rawLines.sublist(1).join('\n').trim();
+    }
+
+    // 불릿 항목 및 일반 문단 분류
+    final bulletItems = <String>[];
+    final generalParagraphs = <String>[];
+
+    for (final line in rawContent.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
+        bulletItems.add(trimmed.substring(1).trim());
+      } else {
+        generalParagraphs.add(trimmed);
+      }
+    }
+
+    return Dialog(
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      elevation: 16,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(
+          color: isDark ? const Color(0xFF333333) : const Color(0xFFEBE6DD),
+          width: 1,
+        ),
+      ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── 1. 헤더 (아이콘 배지 + 카테고리 칩 + 타이틀 + 닫기 버튼) ──
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: primaryColor.withValues(alpha: isDark ? 0.2 : 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    icon ?? Icons.lightbulb_outline_rounded,
+                    color: primaryColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        badge ?? '도움말 & 안내',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: primaryColor,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        cleanTitle,
+                        style: TextStyle(
+                          fontSize: 17.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          color: isDark ? Colors.white : const Color(0xFF191816),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => Navigator.pop(context),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF2ECE2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // ── 2. 본문 내용 (카드 박스 + 불릿/키워드 볼드 처리 + 스크롤) ──
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.52,
+              ),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF262626) : const Color(0xFFF8F6F2),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF383838) : const Color(0xFFEBE6DD),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (headerTip != null) ...[
+                        Row(
+                          children: [
+                            Icon(Icons.tips_and_updates_outlined, size: 15, color: primaryColor),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                headerTip,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: primaryColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          height: 0.8,
+                          color: isDark ? const Color(0xFF383838) : const Color(0xFFE5E0D6),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (bulletItems.isNotEmpty)
+                        ...bulletItems.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final item = entry.value;
+                          final isLast = idx == bulletItems.length - 1 && generalParagraphs.isEmpty;
+
+                          // '키워드: 내용' 형태인 경우 키워드 볼드 처리
+                          final colonIdx = item.indexOf(':');
+                          Widget textWidget;
+                          if (colonIdx != -1) {
+                            final keyword = item.substring(0, colonIdx + 1);
+                            final rest = item.substring(colonIdx + 1);
+                            textWidget = RichText(
+                              text: TextSpan(
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  height: 1.55,
+                                  color: isDark ? Colors.grey[200] : const Color(0xFF2D2A26),
+                                  fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,
+                                ),
+                                children: [
+                                  TextSpan(
+                                    text: keyword,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? Colors.white : const Color(0xFF141312),
+                                    ),
+                                  ),
+                                  TextSpan(text: rest),
+                                ],
+                              ),
+                            );
+                          } else {
+                            textWidget = Text(
+                              item,
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.55,
+                                color: isDark ? Colors.grey[200] : const Color(0xFF2D2A26),
+                              ),
+                            );
+                          }
+
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: isLast ? 0 : 11),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  margin: const EdgeInsets.only(top: 7, right: 9),
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: primaryColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                Expanded(child: textWidget),
+                              ],
+                            ),
+                          );
+                        }),
+                      if (generalParagraphs.isNotEmpty)
+                        ...generalParagraphs.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final p = entry.value;
+                          final isLast = idx == generalParagraphs.length - 1;
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              top: (bulletItems.isNotEmpty && idx == 0) ? 8 : 0,
+                              bottom: isLast ? 0 : 8,
+                            ),
+                            child: Text(
+                              p,
+                              style: TextStyle(
+                                fontSize: 13.2,
+                                height: 1.55,
+                                color: isDark ? Colors.grey[200] : const Color(0xFF2D2A26),
+                              ),
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // ── 3. 하단 풀-위드 확인 버튼 ──
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context);
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_rounded, size: 18),
+                    SizedBox(width: 6),
+                    Text(
+                      '확인했어요',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

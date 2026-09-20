@@ -1,11 +1,25 @@
 import 'package:flutter/material.dart';
 import 'formatters.dart';
+import 'common_widgets.dart';
 
 class ScenarioPanel extends StatelessWidget {
+  final double annualReturn;
+  final double dividendYield;
+  final double actualDividendYield;
+  final double monthlyContribution;
+  final double contributionGrowth;
+  final int years;
+  final ValueChanged<double> onAnnualReturnChanged;
+  final ValueChanged<double> onDividendYieldChanged;
+  final ValueChanged<double> onMonthlyContributionChanged;
+  final ValueChanged<double> onContributionGrowthChanged;
+  final ValueChanged<int> onYearsChanged;
+
   const ScenarioPanel({
     super.key,
     required this.annualReturn,
     required this.dividendYield,
+    this.actualDividendYield = 0.0,
     required this.monthlyContribution,
     required this.contributionGrowth,
     required this.years,
@@ -15,17 +29,6 @@ class ScenarioPanel extends StatelessWidget {
     required this.onContributionGrowthChanged,
     required this.onYearsChanged,
   });
-
-  final double annualReturn;
-  final double dividendYield;
-  final double monthlyContribution;
-  final double contributionGrowth;
-  final int years;
-  final ValueChanged<double> onAnnualReturnChanged;
-  final ValueChanged<double> onDividendYieldChanged;
-  final ValueChanged<double> onMonthlyContributionChanged;
-  final ValueChanged<double> onContributionGrowthChanged;
-  final ValueChanged<int> onYearsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -98,27 +101,23 @@ class ScenarioPanel extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
+          // 1. 슬라이더 영역 (연속 배치로 통일감 부여)
           SliderField(
-            label: '연평균 주가성장(시세차익)',
+            label: '연평균 주가 상승률',
             valueLabel: '${annualReturn.toStringAsFixed(1)}%',
             value: annualReturn,
             min: -10,
             max: 20,
             divisions: 60,
             onChanged: onAnnualReturnChanged,
-            helpText: '보유 자산의 매매 가격(시세)이 1년 동안 상승/하락하는 평균 비율입니다.\n\n물가상승률(인플레이션)을 감안한 실질 주가 상승률을 입력하시면 더욱 정교한 시뮬레이션 결과를 볼 수 있습니다.',
+            helpBadge: '시뮬레이션 가이드',
+            helpIcon: Icons.trending_up_rounded,
+            helpText: '• 실질 주가 상승률: 보유 종목의 매매 가격(시세)이 1년 동안 변동하는 연평균 상승/하락률입니다.\n'
+                      '• 인플레이션 반영: 물가상승률을 감안한 실질 기대수익률을 입력하시면 현실에 더 가까운 미래 자산 추정치를 확인할 수 있습니다.\n'
+                      '• 배당 수익 제외: 배당금은 하단의 "배당금 전액 재투자" 옵션에서 별도로 복리 계산됩니다.',
           ),
-          SliderField(
-            label: '연평균 배당수익률',
-            valueLabel: '${dividendYield.toStringAsFixed(1)}%',
-            value: dividendYield,
-            min: 0,
-            max: 15,
-            divisions: 30,
-            onChanged: onDividendYieldChanged,
-            helpText: '자산에서 매년 발생하는 배당금(분배금, 이자 등)의 비율입니다.\n\n이 금액은 단리 차트에서는 "현금"으로 누적되며, 복리 차트에서는 매번 "재투자"되는 것으로 계산됩니다.\n(성장주 등 배당이 없는 자산이라면 0%로 설정하세요.)',
-          ),
+          const SizedBox(height: 4),
           SliderField(
             label: '월 추가 투자금',
             valueLabel: formatCurrencyFull(monthlyContribution),
@@ -127,82 +126,203 @@ class ScenarioPanel extends StatelessWidget {
             max: 5000000,
             divisions: 50,
             onChanged: onMonthlyContributionChanged,
-            helpText: '매월 새롭게 저축하거나 주식/계좌 등에 직접 추가하여 납입할 신규 원금 액수입니다.',
-          ),
-          SliderField(
-            label: '투자금 연 증가율',
-            valueLabel: '${contributionGrowth.toStringAsFixed(1)}%',
-            value: contributionGrowth,
-            min: 0,
-            max: 10,
-            divisions: 20,
-            onChanged: onContributionGrowthChanged,
-            helpText: '연봉 상승이나 소득 증가에 맞추어, 매년 월 투자 저축액을 늘려가는 비율입니다.\n\n예를 들어 월 적립금이 100만 원이고 연 증가율이 5%라면, 2년 차에는 월 105만 원, 3년 차에는 월 110.2만 원으로 증액 납입되어 장기 복리 효과를 더욱 사실적으로 예측해 줍니다.',
+            helpBadge: '시뮬레이션 가이드',
+            helpIcon: Icons.savings_outlined,
+            helpText: '• 정기 적립 투자: 매월 급여나 사업 소득에서 주식, ETF 등에 지속적으로 추가 납입할 신규 투자 원금입니다.\n'
+                      '• 복리 엔진: 매달 꾸준히 유입되는 신규 자금은 주가 변동성을 낮추고 복리 스노우볼을 가속화합니다.',
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Text(
-                '시뮬레이션 기간',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.grey[300] : const Color(0xFF5E574E),
-                ),
+          // 2. 하단 옵션 통합 컨테이너 (배당 재투자 + 기간 선택)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF252525) : const Color(0xFFF7F5F0),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E3DA),
+                width: 0.8,
               ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF262626) : const Color(0xFFF5F3EE),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
-                    width: 0.8,
+            ),
+            child: Column(
+              children: [
+                _buildReinvestRow(context, isDark, primaryColor),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Divider(
+                    height: 1,
+                    thickness: 0.8,
+                    color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E3DA),
                   ),
                 ),
-                child: Row(
-                  children: [10, 15, 20, 25].map((option) {
-                    final isSelected = years == option;
-                    return GestureDetector(
-                      onTap: () => onYearsChanged(option),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? (isDark ? const Color(0xFF383838) : Colors.white)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(7),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 1),
-                                  )
-                                ]
-                              : null,
-                        ),
-                        child: Text(
-                          '$option년',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                            color: isSelected
-                                ? (isDark ? const Color(0xFF34D399) : primaryColor)
-                                : (isDark ? Colors.grey[400] : const Color(0xFF7A7265)),
-                          ),
-                        ),
+                _buildYearsRow(context, isDark, primaryColor),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReinvestRow(BuildContext context, bool isDark, Color primaryColor) {
+    final bool isReinvesting = dividendYield > 0;
+    final effectiveYield = actualDividendYield > 0
+        ? actualDividendYield
+        : (dividendYield > 0 ? dividendYield : 3.0);
+
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: (isReinvesting
+                    ? (isDark ? const Color(0xFF34D399) : primaryColor)
+                    : Colors.grey)
+                .withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            Icons.autorenew_rounded,
+            size: 16,
+            color: isReinvesting
+                ? (isDark ? const Color(0xFF34D399) : primaryColor)
+                : (isDark ? Colors.grey[500] : const Color(0xFF8C847A)),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    '배당금 전액 재투자',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF1E1E1E),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: isReinvesting
+                          ? (isDark
+                              ? const Color(0xFF34D399).withValues(alpha: 0.15)
+                              : primaryColor.withValues(alpha: 0.1))
+                          : (isDark ? const Color(0xFF333333) : const Color(0xFFEBE6DD)),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '연 ${effectiveYield.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: isReinvesting
+                            ? (isDark ? const Color(0xFF34D399) : primaryColor)
+                            : (isDark ? Colors.grey[400] : const Color(0xFF7A7265)),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                isReinvesting
+                    ? '내 보유자산 배당률로 복리 재투자'
+                    : '배당금을 쓰거나 수령 (주가 상승만 반영)',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
                 ),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        Transform.scale(
+          scale: 0.85,
+          child: Switch.adaptive(
+            value: isReinvesting,
+            activeTrackColor: isDark ? const Color(0xFF34D399) : primaryColor,
+            onChanged: (val) {
+              if (val) {
+                onDividendYieldChanged(effectiveYield);
+              } else {
+                onDividendYieldChanged(0.0);
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildYearsRow(BuildContext context, bool isDark, Color primaryColor) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            Icons.schedule_rounded,
+            size: 16,
+            color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          '투자 기간',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : const Color(0xFF1E1E1E),
+          ),
+        ),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.all(2.5),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1C1C1C) : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isDark ? const Color(0xFF333333) : const Color(0xFFE2DCD2),
+              width: 0.8,
+            ),
+          ),
+          child: Row(
+            children: [10, 15, 20, 25].map((option) {
+              final isSelected = years == option;
+              return GestureDetector(
+                onTap: () => onYearsChanged(option),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 8.5, vertical: 4.5),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? (isDark ? const Color(0xFF333333) : const Color(0xFFF0EBE1))
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$option년',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      color: isSelected
+                          ? (isDark ? const Color(0xFF34D399) : primaryColor)
+                          : (isDark ? Colors.grey[400] : const Color(0xFF7A7265)),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -218,6 +338,8 @@ class SliderField extends StatelessWidget {
     required this.divisions,
     required this.onChanged,
     this.helpText,
+    this.helpBadge,
+    this.helpIcon,
   });
 
   final String label;
@@ -228,6 +350,8 @@ class SliderField extends StatelessWidget {
   final int divisions;
   final ValueChanged<double> onChanged;
   final String? helpText;
+  final String? helpBadge;
+  final IconData? helpIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +359,7 @@ class SliderField extends StatelessWidget {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Column(
         children: [
           Row(
@@ -248,54 +372,31 @@ class SliderField extends StatelessWidget {
                     Text(
                       label,
                       style: TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.grey[300] : const Color(0xFF5E574E),
+                        color: isDark ? Colors.grey[300] : const Color(0xFF4A443B),
                       ),
                     ),
                     if (helpText != null) ...[
-                      const SizedBox(width: 5),
+                      const SizedBox(width: 4),
                       GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () {
-                          showDialog(
+                          showModernHelpDialog(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              title: Row(
-                                children: [
-                                  Icon(Icons.info_outline_rounded, color: primaryColor),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    label,
-                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
-                                  ),
-                                ],
-                              ),
-                              content: Text(
-                                helpText!,
-                                style: TextStyle(
-                                  height: 1.45,
-                                  fontSize: 13.5,
-                                  color: isDark ? Colors.grey[300] : const Color(0xFF333333),
-                                ),
-                              ),
-                              actions: [
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: primaryColor,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  child: const Text('확인', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ],
-                            ),
+                            title: label,
+                            badge: helpBadge ?? '시뮬레이션 가이드',
+                            icon: helpIcon ?? Icons.auto_graph_rounded,
+                            content: helpText!,
                           );
                         },
-                        child: Icon(
-                          Icons.help_outline_rounded,
-                          size: 15,
-                          color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.help_outline_rounded,
+                            size: 15,
+                            color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                          ),
                         ),
                       ),
                     ],
@@ -304,9 +405,9 @@ class SliderField extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF262626) : const Color(0xFFF4F0E8),
+                  color: isDark ? const Color(0xFF282828) : const Color(0xFFF2ECE2),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -314,7 +415,7 @@ class SliderField extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 13,
-                    color: isDark ? Colors.grey[200] : const Color(0xFF1A1A1A),
+                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                   ),
                 ),
               ),
@@ -326,8 +427,8 @@ class SliderField extends StatelessWidget {
               inactiveTrackColor: isDark ? const Color(0xFF333333) : const Color(0xFFE5E0D7),
               thumbColor: primaryColor,
               overlayColor: primaryColor.withValues(alpha: 0.12),
-              trackHeight: 4,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+              trackHeight: 3.5,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6.5),
             ),
             child: Slider(
               value: value,

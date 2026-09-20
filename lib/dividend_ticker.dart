@@ -108,14 +108,23 @@ class _DailyDividendTickerState extends State<DailyDividendTicker>
     final double earnPerHour = earnPerSecond * 3600.0;
     final double earnPerDay = widget.annualTotal / 365.0;
 
+    // 초당 오르는 금액에 따라 소수점 표시 자리수 조절 (너무 빠르면 지저분함)
+    int displayDecimals = 2;
+    if (earnPerSecond >= 5.0) {
+      displayDecimals = 0; // 너무 빠르면 소수점 숨김 (1원 단위로만 갱신)
+    } else if (earnPerSecond >= 0.5) {
+      displayDecimals = 1; // 초당 0.5원 이상이면 소수점 1자리만 표시
+    }
+
     // 실시간 누적 금액 분리 (정수부 / 소수점부)
-    final earnedFixed = _currentEarned.toStringAsFixed(2);
+    final earnedFixed = _currentEarned.toStringAsFixed(displayDecimals);
     final earnedParts = earnedFixed.split('.');
     final intFormatted = earnedParts[0].replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]},',
     );
-    final decimalPart = earnedParts.length > 1 ? earnedParts[1] : '00';
+    final decimalPart = earnedParts.length > 1 ? earnedParts[1] : '';
+    final bool showDecimalUI = decimalPart.isNotEmpty;
 
     // 초당/분당 실시간 적립 텍스트
     String rateText;
@@ -371,49 +380,66 @@ class _DailyDividendTickerState extends State<DailyDividendTicker>
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 1.5),
-                              // 소수점부 (실시간으로 빠르게 올라가는 포인트 하이라이트 칩)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 3.5, vertical: 1.5),
-                                decoration: BoxDecoration(
-                                  color: primaryColor.withValues(
-                                      alpha: isDark ? 0.3 : 0.18),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '.$decimalPart',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w900,
-                                        color: primaryColor,
-                                        letterSpacing: -0.2,
-                                        fontFeatures: const [
-                                          FontFeature.tabularFigures()
-                                        ],
+                              if (showDecimalUI) ...[
+                                const SizedBox(width: 1.5),
+                                // 소수점부 (실시간으로 빠르게 올라가는 포인트 하이라이트 칩)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 3.5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: primaryColor.withValues(
+                                        alpha: isDark ? 0.3 : 0.18),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '.$decimalPart',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900,
+                                          color: primaryColor,
+                                          letterSpacing: -0.2,
+                                          fontFeatures: const [
+                                            FontFeature.tabularFigures()
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 1),
-                                    // 실시간 상승 화살표 깜빡임
-                                    AnimatedBuilder(
-                                      animation: _blinkAnimation,
-                                      builder: (context, child) {
-                                        return Opacity(
-                                          opacity: _blinkAnimation.value,
-                                          child: const Icon(
-                                            Icons.arrow_drop_up_rounded,
-                                            size: 14,
-                                            color: Color(0xFF10B981),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
+                                      const SizedBox(width: 1),
+                                      // 실시간 상승 화살표 깜빡임
+                                      AnimatedBuilder(
+                                        animation: _blinkAnimation,
+                                        builder: (context, child) {
+                                          return Opacity(
+                                            opacity: _blinkAnimation.value,
+                                            child: const Icon(
+                                              Icons.arrow_drop_up_rounded,
+                                              size: 14,
+                                              color: Color(0xFF10B981),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                              ] else ...[
+                                const SizedBox(width: 2),
+                                AnimatedBuilder(
+                                  animation: _blinkAnimation,
+                                  builder: (context, child) {
+                                    return Opacity(
+                                      opacity: _blinkAnimation.value,
+                                      child: const Icon(
+                                        Icons.arrow_drop_up_rounded,
+                                        size: 16,
+                                        color: Color(0xFF10B981),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             ],
                           ),
                         ),

@@ -187,9 +187,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       description: '보유한 주식의 배당금이 언제, 얼마나 들어오는지 파악하세요.\n증권사 앱에선 볼 수 없는\n직관적인 배당 캘린더가 완성됩니다.',
     ),
     _OnboardingPage(
-      visual: _FireMockVisual(),
-      title: '경제적 자유(FIRE)를\n향한 네비게이션',
-      description: '지금처럼 모으면 언제 은퇴할 수 있을까?\n물가 상승률과 배당 복리를 반영한\n나만의 은퇴 시뮬레이션을 돌려보세요.',
+      visual: _CompoundMockVisual(),
+      title: '복리의 마법으로\n미래 자산 미리보기',
+      description: '매월 추가 투자금과 배당 재투자의 힘!\n주가 상승률에 따른 복리 성장 곡선으로\n10년, 20년 뒤 내 자산의 성장을 시뮬레이션하세요.',
     ),
     _OnboardingPage(
       visual: _PrivacyMockVisual(),
@@ -445,16 +445,17 @@ class _DividendMockVisual extends StatelessWidget {
   }
 }
 
-class _FireMockVisual extends StatelessWidget {
-  const _FireMockVisual();
-  
+class _CompoundMockVisual extends StatelessWidget {
+  const _CompoundMockVisual();
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Container(
-      width: 220,
-      padding: const EdgeInsets.all(24),
+      width: 230,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF242424) : Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -478,68 +479,76 @@ class _FireMockVisual extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'FIRE 진척도',
+                '10년 후 예상 자산',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : const Color(0xFF2C2A28),
+                  color: isDark ? Colors.grey[300] : const Color(0xFF5C5750),
                 ),
               ),
-              const Text(
-                '45%',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF10B981),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            height: 12,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF333333) : const Color(0xFFE5E5E5),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: 0.45,
-              child: Container(
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF34D399), Color(0xFF10B981)],
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.4),
-                      blurRadius: 6,
+                  color: primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.auto_graph_rounded, size: 12, color: primaryColor),
+                    const SizedBox(width: 3),
+                    Text(
+                      '복리 성장',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: primaryColor,
+                      ),
                     ),
                   ],
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '₩ 5억 4,800만',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: isDark ? Colors.white : const Color(0xFF2C2A28),
+              letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 48,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _MiniCompoundChartPainter(
+                color: primaryColor,
+                isDark: isDark,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF10B981),
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: primaryColor,
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
-                '바리스타 FIRE 달성!',
+                '월 투자금 + 배당금 전액 재투자',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.grey[300] : const Color(0xFF4A4A4A),
+                  color: isDark ? Colors.grey[400] : const Color(0xFF8C847A),
                 ),
               ),
             ],
@@ -548,6 +557,70 @@ class _FireMockVisual extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MiniCompoundChartPainter extends CustomPainter {
+  final Color color;
+  final bool isDark;
+
+  const _MiniCompoundChartPainter({required this.color, required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          color.withValues(alpha: 0.28),
+          color.withValues(alpha: 0.0),
+        ],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(0, size.height * 0.88);
+    path.cubicTo(
+      size.width * 0.35,
+      size.height * 0.82,
+      size.width * 0.65,
+      size.height * 0.45,
+      size.width,
+      size.height * 0.08,
+    );
+
+    final fillPath = Path.from(path)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(path, linePaint);
+
+    final dotCenter = Offset(size.width, size.height * 0.08);
+    final dotGlow = Paint()
+      ..color = color.withValues(alpha: 0.35)
+      ..style = PaintingStyle.fill;
+    final dotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final whiteDotPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(dotCenter, 6, dotGlow);
+    canvas.drawCircle(dotCenter, 4, dotPaint);
+    canvas.drawCircle(dotCenter, 2, whiteDotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _PrivacyMockVisual extends StatelessWidget {
@@ -877,6 +950,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
               ),
               SimulationTab(
                 storage: widget.storage,
+                holdings: _holdings,
                 currentValue: _currentValue,
                 projectedValue: projectedValue,
                 years: _settings.years,

@@ -221,26 +221,25 @@ class _ProjectionChartState extends State<ProjectionChart> with SingleTickerProv
             ),
             const SizedBox(height: 4),
             Text(
-              '총 자산(배당 재투자): ${formatCurrency(point.total)}',
+              '총 예상 자산: ${formatCurrency(point.total)}',
               style: TextStyle(
                 fontWeight: FontWeight.w900,
                 fontSize: 13,
                 color: primaryColor,
               ),
             ),
-            if (point.total > point.simpleTotal) ...[
-              const SizedBox(height: 2),
-              Text(
-                '배당 미재투자 시: ${formatCurrency(point.simpleTotal)}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? const Color(0xFFE2A03F) : const Color(0xFFD97706),
-                  fontWeight: FontWeight.w700,
-                ),
+            const SizedBox(height: 2),
+            Text(
+              '누적 투자금: ${formatCurrency(point.cumulativeContribution)}',
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
               ),
+            ),
+            if (point.total > point.cumulativeContribution) ...[
               const SizedBox(height: 2),
               Text(
-                '재투자로 얻은 추가수익: +${formatCurrency(point.total - point.simpleTotal)}',
+                '예상 수익: +${formatCurrency(point.total - point.cumulativeContribution)}',
                 style: TextStyle(
                   fontSize: 11,
                   color: isDark ? const Color(0xFF34D399) : const Color(0xFF059669),
@@ -248,14 +247,6 @@ class _ProjectionChartState extends State<ProjectionChart> with SingleTickerProv
                 ),
               ),
             ],
-            const SizedBox(height: 4),
-            Text(
-              '누적 원금: ${formatCurrency(point.cumulativeContribution)}',
-              style: TextStyle(
-                fontSize: 11,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
-            ),
           ],
         ),
       ),
@@ -337,16 +328,12 @@ class ProjectionChartPainter extends CustomPainter {
       );
     }
 
-    // 곡선 경로 및 그라데이션 채우기 (배당 재투자 - 복리)
+    // 곡선 경로 및 그라데이션 채우기
     final path = Path();
     final fillPath = Path();
-    
-    // 단리 경로 (배당 비재투자)
-    final simplePath = Path();
 
     final firstPt = mapPoint(points[0], 0);
     path.moveTo(firstPt.dx, firstPt.dy);
-    simplePath.moveTo(firstPt.dx, padding.top + chartHeight - ((points[0].simpleTotal - effectiveMinY) / rangeY * chartHeight));
     
     fillPath.moveTo(firstPt.dx, padding.top + chartHeight);
     fillPath.lineTo(firstPt.dx, firstPt.dy);
@@ -356,14 +343,8 @@ class ProjectionChartPainter extends CustomPainter {
       final prevPt = mapPoint(points[i - 1], i - 1);
       final midX = (prevPt.dx + pt.dx) / 2;
       
-      // 복리 곡선
       path.cubicTo(midX, prevPt.dy, midX, pt.dy, pt.dx, pt.dy);
       fillPath.cubicTo(midX, prevPt.dy, midX, pt.dy, pt.dx, pt.dy);
-      
-      // 단리 곡선
-      final sPt = Offset(pt.dx, padding.top + chartHeight - ((points[i].simpleTotal - effectiveMinY) / rangeY * chartHeight));
-      final sPrevPt = Offset(prevPt.dx, padding.top + chartHeight - ((points[i - 1].simpleTotal - effectiveMinY) / rangeY * chartHeight));
-      simplePath.cubicTo(midX, sPrevPt.dy, midX, sPt.dy, sPt.dx, sPt.dy);
     }
 
     final lastPt = mapPoint(points.last, points.length - 1);
@@ -374,34 +355,25 @@ class ProjectionChartPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(Rect.fromLTWH(padding.left, 0, chartWidth * animationValue, size.height));
 
-    // 복리 그라데이션 영역
+    // 그라데이션 영역 채우기
     final fillPaint = Paint()
       ..shader = ui.Gradient.linear(
         Offset(0, padding.top),
         Offset(0, padding.top + chartHeight),
         [
-          primaryColor.withValues(alpha: isDark ? 0.35 : 0.2),
+          primaryColor.withValues(alpha: isDark ? 0.35 : 0.18),
           primaryColor.withValues(alpha: 0.0),
         ],
       );
     canvas.drawPath(fillPath, fillPaint);
 
-    // 복리 선 (굵게)
+    // 단일 메인 성장 곡선 (1줄)
     final linePaint = Paint()
       ..color = primaryColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0
       ..strokeCap = StrokeCap.round;
     canvas.drawPath(path, linePaint);
-    
-    // 단리 선 (점선 효과 등을 위해 얇고 다른 색상)
-    final simpleLinePaint = Paint()
-      ..color = isDark ? const Color(0xFFE2A03F) : const Color(0xFFD97706)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round;
-    
-    canvas.drawPath(simplePath, simpleLinePaint);
 
     canvas.restore();
 

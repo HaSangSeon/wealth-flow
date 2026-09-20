@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'models.dart';
+import 'dividend_models.dart';
 import 'formatters.dart';
 import 'common_widgets.dart';
 import 'simulation_chart.dart';
 import 'simulation_table.dart';
 import 'simulation_scenario_panel.dart';
-import 'simulation_goal_planner.dart';
 
 export 'simulation_scenario_panel.dart';
 export 'simulation_chart.dart';
 export 'simulation_table.dart';
-export 'simulation_goal_planner.dart';
 
 class SimulationTab extends StatefulWidget {
   const SimulationTab({
@@ -35,10 +34,12 @@ class SimulationTab extends StatefulWidget {
     required this.onTargetAmountChanged,
     required this.onTargetYearsChanged,
     this.onDataRestored,
+    this.holdings,
   });
 
   final StorageService storage;
   final VoidCallback? onDataRestored;
+  final List<Holding>? holdings;
   final double currentValue;
   final double projectedValue;
   final int years;
@@ -63,97 +64,22 @@ class SimulationTab extends StatefulWidget {
 }
 
 class _SimulationTabState extends State<SimulationTab> {
-  bool _showGoalPlanner = false;
-
-  Widget _buildTabToggle(bool isDark) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFEBE6DD),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFDED8CE),
-          width: 0.8,
-        ),
-      ),
-      child: Stack(
-        children: [
-          AnimatedAlign(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            alignment: _showGoalPlanner ? Alignment.centerRight : Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: 0.5,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    if (_showGoalPlanner) setState(() => _showGoalPlanner = false);
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: Center(
-                    child: Text(
-                      '복리 시뮬레이션',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: !_showGoalPlanner ? FontWeight.w800 : FontWeight.w600,
-                        color: !_showGoalPlanner
-                            ? (isDark ? Colors.white : const Color(0xFF1A1A1A))
-                            : (isDark ? Colors.grey[400] : const Color(0xFF7A7265)),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    if (!_showGoalPlanner) setState(() => _showGoalPlanner = true);
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: Center(
-                    child: Text(
-                      '은퇴·목표 플래너',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: _showGoalPlanner ? FontWeight.w800 : FontWeight.w600,
-                        color: _showGoalPlanner
-                            ? (isDark ? const Color(0xFF34D399) : primaryColor)
-                            : (isDark ? Colors.grey[400] : const Color(0xFF7A7265)),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    double actualDividendYield = 0.0;
+    if (widget.holdings != null && widget.holdings!.isNotEmpty) {
+      final divData = calculateDividendData(
+        holdings: widget.holdings!,
+        lastExchangeRate: widget.storage.lastExchangeRate,
+        applyTax: false,
+      );
+      if (divData.totalStockValuation > 0) {
+        actualDividendYield =
+            (divData.annualTotal / divData.totalStockValuation) * 100;
+      }
+    }
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -188,7 +114,7 @@ class _SimulationTabState extends State<SimulationTab> {
                                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
                               ),
                               Text(
-                                _showGoalPlanner ? '은퇴·목표 플래너' : '미래 자산 시뮬레이션',
+                                '미래 자산 시뮬레이션',
                                 style: TextStyle(
                                   color: isDark ? Colors.grey[400] : const Color(0xFF6E675E),
                                   fontSize: 12,
@@ -204,50 +130,31 @@ class _SimulationTabState extends State<SimulationTab> {
                       ],
                     ),
                     const SizedBox(height: 20),
-                    _buildTabToggle(isDark),
+                    _Header(
+                      currentValue: widget.currentValue,
+                      projectedValue: widget.projectedValue,
+                      years: widget.years,
+                      gain: widget.gain,
+                    ),
                     const SizedBox(height: 16),
-
-                    if (!_showGoalPlanner) ...[
-                      _Header(
-                        currentValue: widget.currentValue,
-                        projectedValue: widget.projectedValue,
-                        years: widget.years,
-                        gain: widget.gain,
-                      ),
-                      const SizedBox(height: 16),
-                      ScenarioPanel(
-                        annualReturn: widget.annualReturn,
-                        dividendYield: widget.dividendYield,
-                        monthlyContribution: widget.monthlyContribution,
-                        contributionGrowth: widget.contributionGrowth,
-                        years: widget.years,
-                        onAnnualReturnChanged: widget.onAnnualReturnChanged,
-                        onDividendYieldChanged: widget.onDividendYieldChanged,
-                        onMonthlyContributionChanged: widget.onMonthlyContributionChanged,
-                        onContributionGrowthChanged: widget.onContributionGrowthChanged,
-                        onYearsChanged: widget.onYearsChanged,
-                      ),
-                      const SizedBox(height: 16),
-                      ProjectionChart(points: widget.projectionPoints),
-                      const SizedBox(height: 16),
-                      ProjectionTable(points: widget.projectionPoints),
-                      const SizedBox(height: 28),
-                    ] else ...[
-                      GoalPlannerView(
-                        currentValue: widget.currentValue,
-                        targetAmount: widget.targetAmount,
-                        targetYears: widget.targetYears,
-                        annualReturn: widget.annualReturn,
-                        dividendYield: widget.dividendYield,
-                        monthlyContribution: widget.monthlyContribution,
-                        contributionGrowth: widget.contributionGrowth,
-                        onTargetAmountChanged: widget.onTargetAmountChanged,
-                        onTargetYearsChanged: widget.onTargetYearsChanged,
-                        onMonthlyContributionChanged: widget.onMonthlyContributionChanged,
-                        onAnnualReturnChanged: widget.onAnnualReturnChanged,
-                      ),
-                      const SizedBox(height: 28),
-                    ],
+                    ScenarioPanel(
+                      annualReturn: widget.annualReturn,
+                      dividendYield: widget.dividendYield,
+                      actualDividendYield: actualDividendYield,
+                      monthlyContribution: widget.monthlyContribution,
+                      contributionGrowth: widget.contributionGrowth,
+                      years: widget.years,
+                      onAnnualReturnChanged: widget.onAnnualReturnChanged,
+                      onDividendYieldChanged: widget.onDividendYieldChanged,
+                      onMonthlyContributionChanged: widget.onMonthlyContributionChanged,
+                      onContributionGrowthChanged: widget.onContributionGrowthChanged,
+                      onYearsChanged: widget.onYearsChanged,
+                    ),
+                    const SizedBox(height: 16),
+                    ProjectionChart(points: widget.projectionPoints),
+                    const SizedBox(height: 16),
+                    ProjectionTable(points: widget.projectionPoints),
+                    const SizedBox(height: 28),
                   ],
                 ),
               ),

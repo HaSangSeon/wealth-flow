@@ -6,28 +6,36 @@ class GoalPlannerView extends StatelessWidget {
     super.key,
     required this.currentValue,
     required this.targetAmount,
-    required this.targetYears,
+    this.years = 15,
+    this.targetYears = 15,
     required this.annualReturn,
     required this.dividendYield,
     required this.monthlyContribution,
     required this.contributionGrowth,
     required this.onTargetAmountChanged,
-    required this.onTargetYearsChanged,
     required this.onMonthlyContributionChanged,
     required this.onAnnualReturnChanged,
+    this.onTargetYearsChanged,
+    this.onDividendYieldChanged,
+    this.onContributionGrowthChanged,
+    this.actualMonthlyDividend = 0.0,
   });
 
   final double currentValue;
   final double targetAmount;
+  final int years;
   final int targetYears;
   final double annualReturn;
   final double dividendYield;
   final double monthlyContribution;
   final double contributionGrowth;
+  final double actualMonthlyDividend;
   final ValueChanged<double> onTargetAmountChanged;
-  final ValueChanged<int> onTargetYearsChanged;
   final ValueChanged<double> onMonthlyContributionChanged;
   final ValueChanged<double> onAnnualReturnChanged;
+  final ValueChanged<int>? onTargetYearsChanged;
+  final ValueChanged<double>? onDividendYieldChanged;
+  final ValueChanged<double>? onContributionGrowthChanged;
 
   String _formatWithComma(num n) {
     return n.round().toString().replaceAllMapped(
@@ -139,8 +147,9 @@ class GoalPlannerView extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final int currentYear = DateTime.now().year;
-    final int targetYear = targetYears <= 100 ? currentYear + targetYears : targetYears;
-    final int remainingYears = (targetYear - currentYear).clamp(1, 100);
+    // 복리 시뮬레이션 기간 years를 단일 기준으로 사용
+    final int remainingYears = years > 0 ? years : (targetYears <= 100 ? targetYears : targetYears - currentYear).clamp(1, 100);
+    final int targetYear = currentYear + remainingYears;
 
     final futureValue = _calculateFutureValue(
       currentValue,
@@ -160,11 +169,15 @@ class GoalPlannerView extends StatelessWidget {
           currentValue: currentValue,
           targetAmount: targetAmount,
           annualReturn: annualReturn,
+          dividendYield: dividendYield,
+          actualMonthlyDividend: actualMonthlyDividend,
+          futureValue: futureValue,
+          years: remainingYears,
           isDark: isDark,
         ),
         const SizedBox(height: 16),
 
-        // Sliders card
+        // 은퇴 목표 설정 (목표 금액 단일 슬라이더로 심플화)
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -186,42 +199,32 @@ class GoalPlannerView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF176B5B).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.flag_rounded,
-                      size: 16,
-                      color: Color(0xFF176B5B),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    '은퇴 목표 설정',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              // Target Amount Slider
-              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '목표 금액',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.grey[300] : const Color(0xFF5E574E),
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF176B5B).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.flag_rounded,
+                          size: 16,
+                          color: Color(0xFF176B5B),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '은퇴 목표 금액 설정',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ],
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -240,6 +243,7 @@ class GoalPlannerView extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
               Slider(
                 value: targetAmount,
                 min: 10000000.0,
@@ -249,65 +253,37 @@ class GoalPlannerView extends StatelessWidget {
                 inactiveColor: isDark ? const Color(0xFF333333) : const Color(0xFFECE7DF),
                 onChanged: onTargetAmountChanged,
               ),
-              const SizedBox(height: 12),
-              // Target Years Slider (Absolute Year)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '목표 연도',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.grey[300] : const Color(0xFF5E574E),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0EBE1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '$targetYear년 ($remainingYears년 남음)',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Slider(
-                value: targetYear.toDouble(),
-                min: (currentYear + 1).toDouble(),
-                max: (currentYear + 50).toDouble(),
-                divisions: 49,
-                activeColor: const Color(0xFF176B5B),
-                inactiveColor: isDark ? const Color(0xFF333333) : const Color(0xFFECE7DF),
-                onChanged: (val) {
-                  onTargetYearsChanged(val.toInt());
-                },
-              ),
-              const SizedBox(height: 16),
-              // 현재 시뮬레이션 기본 설정 요약 표시
+              const SizedBox(height: 10),
+              // 복리 시뮬레이션 설정 기준 안내 바
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF262626) : const Color(0xFFF7F5F0),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: isDark ? const Color(0xFF333333) : const Color(0xFFEBE6DD),
                     width: 0.8,
                   ),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildAssumptionItem('연동 월 저축액', _formatKoreanAmount(monthlyContribution), isDark),
-                    _buildAssumptionItem('연동 수익률', '${annualReturn.toStringAsFixed(1)}%', isDark),
-                    _buildAssumptionItem('연동 저축 증액률', '연 ${contributionGrowth.toStringAsFixed(1)}%', isDark),
+                    Icon(
+                      Icons.sync_rounded,
+                      size: 14,
+                      color: isDark ? const Color(0xFF34D399) : const Color(0xFF176B5B),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '시뮬레이션 조건: $remainingYears년 뒤 ($targetYear년) 은퇴 · 월 ${_formatKoreanAmount(monthlyContribution)} 추가 투자',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.grey[300] : const Color(0xFF5E574E),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -361,6 +337,23 @@ class GoalPlannerView extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                 ),
+              ),
+              const SizedBox(height: 3),
+              Builder(
+                builder: (context) {
+                  final effectiveDivRate = dividendYield > 0 ? dividendYield : (annualReturn > 0 ? annualReturn : 4.0);
+                  final futureMonthlyDiv = (futureValue * (effectiveDivRate / 100)) / 12;
+                  return Text(
+                    '은퇴 예상 월 배당금: 약 ${_formatKoreanAmount(futureMonthlyDiv)} (배당률 ${effectiveDivRate.toStringAsFixed(1)}% 기준)',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: isGoalMet
+                          ? (isDark ? const Color(0xFF81C784) : const Color(0xFF2E7D32))
+                          : (isDark ? const Color(0xFFFFB74D) : const Color(0xFFEF6C00)),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 4),
               Text(
@@ -419,7 +412,7 @@ class GoalPlannerView extends StatelessWidget {
                 description: '은퇴/목표 시점을 $diff년 더 늘려서 목표 연도를 ${currentYear + reqYears}년으로 설정해보세요.',
                 buttonText: '적용',
                 onTap: () {
-                  onTargetYearsChanged(currentYear + reqYears);
+                  onTargetYearsChanged?.call(currentYear + reqYears);
                 },
               );
             },
@@ -481,7 +474,7 @@ class GoalPlannerView extends StatelessWidget {
                 description: '현재 자산 납입 페이스로는 목표를 $diff년 단축하여 ${currentYear + minYears}년에 조기 달성할 수 있습니다.',
                 buttonText: '조정',
                 onTap: () {
-                  onTargetYearsChanged(currentYear + minYears);
+                  onTargetYearsChanged?.call(currentYear + minYears);
                 },
               );
             },
@@ -598,36 +591,16 @@ class GoalPlannerView extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildAssumptionItem(String label, String value, bool isDark) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: isDark ? Colors.grey[400] : Colors.grey[600],
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class GoalProgressGauge extends StatelessWidget {
   final double currentValue;
   final double targetAmount;
   final double annualReturn;
+  final double dividendYield;
+  final double actualMonthlyDividend;
+  final double futureValue;
+  final int years;
   final bool isDark;
 
   const GoalProgressGauge({
@@ -635,6 +608,10 @@ class GoalProgressGauge extends StatelessWidget {
     required this.currentValue,
     required this.targetAmount,
     required this.annualReturn,
+    this.dividendYield = 3.0,
+    this.actualMonthlyDividend = 0.0,
+    required this.futureValue,
+    required this.years,
     required this.isDark,
   });
 
@@ -657,9 +634,13 @@ class GoalProgressGauge extends StatelessWidget {
       } else {
         return '$eokStr억 원';
       }
-    } else if (amount >= 10000) {
+    } else if (amount >= 1000000) {
       final double man = amount / 10000;
       return '${_formatWithComma(man)}만 원';
+    } else if (amount >= 10000) {
+      final double man = amount / 10000;
+      final manStr = man.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '');
+      return '$manStr만 원';
     } else {
       return '${_formatWithComma(amount)}원';
     }
@@ -668,12 +649,15 @@ class GoalProgressGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
+    // 복리 투자 미래 예상 자산 기준 달성률
     final double percent = targetAmount > 0 
-        ? (currentValue / targetAmount * 100).clamp(0.0, 100.0) 
+        ? (futureValue / targetAmount * 100).clamp(0.0, 100.0) 
         : 0.0;
         
-    final double currentMonthlyDividend = (currentValue * (annualReturn / 100)) / 12;
-    final double targetMonthlyDividend = (targetAmount * (annualReturn / 100)) / 12;
+    final double targetRate = dividendYield > 0 ? dividendYield : (annualReturn > 0 ? annualReturn : 4.0);
+    final double targetMonthlyDividend = (targetAmount * (targetRate / 100)) / 12;
+    // 은퇴 시점 미래 예상 월 배당금
+    final double futureMonthlyDividend = (futureValue * (targetRate / 100)) / 12;
 
     ({String title, String desc}) getMilestoneInfo(double monthly) {
       if (monthly < 10000) {
@@ -828,7 +812,7 @@ class GoalProgressGauge extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        '예상 월 배당금',
+                        '$years년 뒤 예상 월 배당금',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -837,7 +821,7 @@ class GoalProgressGauge extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _formatKoreanAmount(currentMonthlyDividend),
+                        _formatKoreanAmount(futureMonthlyDividend),
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -857,7 +841,7 @@ class GoalProgressGauge extends StatelessWidget {
           // 배당 커버리지 마일스톤 뱃지
           Builder(
             builder: (context) {
-              final milestone = getMilestoneInfo(currentMonthlyDividend);
+              final milestone = getMilestoneInfo(futureMonthlyDividend);
               return Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -923,33 +907,48 @@ class GoalProgressGauge extends StatelessWidget {
           const SizedBox(height: 16),
           
           // 목표 자산 요약
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '목표 자산 ${_formatKoreanAmount(targetAmount)}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.grey[400] : const Color(0xFF6B655D),
-                ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '목표 자산 ${_formatKoreanAmount(targetAmount)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.grey[400] : const Color(0xFF6B655D),
+                    ),
+                  ),
+                  Text(
+                    '  |  ',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.grey[700] : const Color(0xFFD6D1C9),
+                    ),
+                  ),
+                  Text(
+                    '은퇴 목표 월배당 ${_formatKoreanAmount(targetMonthlyDividend)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? const Color(0xFF34D399) : primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '(${dividendYield > 0 ? "배당률" : "수익률"} ${targetRate.toStringAsFixed(1)}%)',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.grey[400] : const Color(0xFF6B655D),
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                '  |  ',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? Colors.grey[700] : const Color(0xFFD6D1C9),
-                ),
-              ),
-              Text(
-                '목표 월배당 ${_formatKoreanAmount(targetMonthlyDividend)}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? const Color(0xFF34D399) : primaryColor,
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),

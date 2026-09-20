@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dividend_models.dart';
 import 'dividend_ticker.dart';
+import 'common_widgets.dart';
 
 class DividendSummaryHeader extends StatelessWidget {
   const DividendSummaryHeader({
@@ -68,6 +69,29 @@ class DividendSummaryHeader extends StatelessWidget {
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      showModernHelpDialog(
+                        context: context,
+                        title: '배당 요약 및 세금 안내',
+                        badge: '배당 분석 가이드',
+                        icon: Icons.monetization_on_outlined,
+                        content: '• 연간/월평균 배당금: 보유 종목의 최근 공시 배당금을 기준으로 1년간 받게 될 배당 총액 및 12개월 평균값입니다.\n'
+                                 '• 세후(15.4%) 적용: 토글 활성화 시 배당소득세(15.4%)를 차감한 실수령액 기준으로 계산됩니다.\n'
+                                 '• 절세 계좌 혜택: 연금저축 및 IRP 계좌에 보관된 자산은 세법상 세금이 원천징수되지 않고 전액 비과세(과세이연) 처리됩니다.',
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.help_outline_rounded,
+                        size: 15,
+                        color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                      ),
                     ),
                   ),
                 ],
@@ -343,46 +367,27 @@ class DividendFlowBarChart extends StatelessWidget {
                       color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () {
-                      showDialog(
+                      showModernHelpDialog(
                         context: context,
-                        builder: (context) => AlertDialog(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          title: Row(
-                            children: [
-                              Icon(Icons.info_outline, color: primaryColor),
-                              const SizedBox(width: 8),
-                              const Flexible(
-                                child: Text(
-                                  '예상 배당금 산출 방식',
-                                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
-                                ),
-                              ),
-                            ],
-                          ),
-                          content: Text(
-                            '종목별로 가장 최근에 지급된 배당금을 기준으로, 각 배당 주기(월/분기/반기/연)에 맞춰 미래 1년 치 예상 배당액을 산출합니다.',
-                            style: TextStyle(
-                              height: 1.5,
-                              fontSize: 14,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('확인', style: TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
+                        title: '예상 배당금 산출 방식',
+                        badge: '배당 분석 가이드',
+                        icon: Icons.bar_chart_rounded,
+                        content: '• 최근 공시 기준: 종목별로 가장 최근에 실제 지급된 주당 배당금을 기준으로 계산합니다.\n'
+                                 '• 배당 주기별 배분: 월/분기/반기/연 단위 지급 일정 공시에 맞춰 미래 1년 치 예상 배당액을 각 월별로 배분합니다.\n'
+                                 '• 실지급일 차이: 기업 및 운용사 공시, 영업일, 결제 주기(T+2)에 따라 실제 증권사 입금일과 1~2영업일 차이가 발생할 수 있습니다.',
                       );
                     },
-                    child: Icon(
-                      Icons.help_outline,
-                      size: 16,
-                      color: isDark ? Colors.grey[400] : Colors.grey,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.help_outline_rounded,
+                        size: 15,
+                        color: isDark ? Colors.grey[400] : const Color(0xFF8E867C),
+                      ),
                     ),
                   ),
                 ],
