@@ -843,24 +843,50 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             }
           }
 
-          final dividends = details['dividends'] as List<Map<String, dynamic>>?;
+          final fetchedDividends = details['dividends'] as List<Map<String, dynamic>>?;
+          List<Map<String, dynamic>>? newDividends = fetchedDividends;
+
+          // API 오류나 일시적 통신 지연으로 빈 배열 반환 시 기존 배당 내역 유지
+          if ((newDividends == null || newDividends.isEmpty) && 
+              holding.dividends != null && 
+              holding.dividends!.isNotEmpty) {
+            newDividends = holding.dividends;
+          }
+
+          bool dividendsChanged = false;
+          if (holding.dividends?.length != newDividends?.length) {
+            dividendsChanged = true;
+          } else if (holding.dividends != null && newDividends != null) {
+            for (int j = 0; j < holding.dividends!.length; j++) {
+              if (holding.dividends![j]['date'] != newDividends[j]['date'] ||
+                  holding.dividends![j]['amount'] != newDividends[j]['amount']) {
+                dividendsChanged = true;
+                break;
+              }
+            }
+          }
 
           if (holding.price != price || 
               holding.originalPrice != rawPrice || 
               holding.currency != currency ||
-              holding.dividends != dividends) {
+              dividendsChanged) {
             _holdings[i].price = price;
             _holdings[i].originalPrice = rawPrice;
             _holdings[i].currency = currency;
-            _holdings[i].dividends = dividends;
+            if (dividendsChanged) {
+              _holdings[i].dividends = newDividends;
+            }
             hasUpdates = true;
           }
         }
       }
     }
     
-    if (hasUpdates && mounted) {
-      _saveAll();
+    if (hasUpdates) {
+      _holdings = List.from(_holdings);
+      if (mounted) {
+        _saveAll();
+      }
     }
     widget.storage.lastSyncedAt = DateTime.now();
     if (mounted) {
@@ -1221,18 +1247,41 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       String message;
       if (existingIndex != -1) {
         final existing = _holdings[existingIndex];
+        final totalQuantity = existing.quantity + holding.quantity;
+
+        // 1. 수량 가중 이동평균 평단가(KRW) 정확히 계산
+        final double avgPrice = totalQuantity > 0
+            ? ((existing.quantity * existing.price) + (holding.quantity * holding.price)) / totalQuantity
+            : holding.price;
+
+        // 2. 외화 원가(originalPrice)가 있는 경우 가중평균 계산
+        double? avgOriginalPrice;
+        if (existing.originalPrice != null || holding.originalPrice != null) {
+          final exOrig = existing.originalPrice ?? existing.price;
+          final newOrig = holding.originalPrice ?? holding.price;
+          avgOriginalPrice = totalQuantity > 0
+              ? ((existing.quantity * exOrig) + (holding.quantity * newOrig)) / totalQuantity
+              : newOrig;
+        }
+
+        // 3. 배당 데이터 보존: 새로 추가된 배당 데이터가 유효할 때만 갱신, 아니면 기존 데이터 유지
+        final effectiveDividends = (holding.dividends != null && holding.dividends!.isNotEmpty)
+            ? holding.dividends
+            : existing.dividends;
+
         final updated = Holding(
           name: existing.name,
           symbol: existing.symbol,
           type: existing.type,
           account: existing.account,
-          quantity: existing.quantity + holding.quantity,
-          price: holding.price,
-          originalPrice: holding.originalPrice,
-          currency: holding.currency,
-          dividends: holding.dividends ?? existing.dividends,
+          quantity: totalQuantity,
+          price: avgPrice,
+          originalPrice: avgOriginalPrice,
+          currency: holding.currency ?? existing.currency,
+          dividends: effectiveDividends,
         );
-        setState(() => _holdings[existingIndex] = updated);
+
+        setState(() => _holdings = List.from(_holdings)..[existingIndex] = updated);
         message = "'${holding.name}' 자산이 기존 수량에 합산되었습니다.";
       } else {
         setState(() => _holdings = List.from(_holdings)..add(holding));
