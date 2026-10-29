@@ -135,9 +135,21 @@ class StockAlertService {
         final changePercent = quote.changePercent;
         if (changePercent.abs() >= threshold) {
           // 영향 금액(원화) 계산
-          // 환율 적용: 종목 통화가 KRW가 아니면 USD/외화 환율 적용
-          final isKrw = quote.currency.toUpperCase() == 'KRW';
-          final effectiveRate = isKrw ? 1.0 : exchangeRate;
+          // 환율 적용: 종목 통화에 맞는 실제 환율 적용 (JPY, CAD 등 비USD 통화 대응)
+          final cur = quote.currency.toUpperCase().trim();
+          double effectiveRate = 1.0;
+          if (cur != 'KRW') {
+            if (cur == 'USD') {
+              effectiveRate = exchangeRate;
+            } else {
+              try {
+                final fetched = await yahoo.fetchExchangeRate(cur);
+                effectiveRate = fetched ?? yahoo.getFallbackExchangeRate(cur);
+              } catch (_) {
+                effectiveRate = yahoo.getFallbackExchangeRate(cur);
+              }
+            }
+          }
           
           final impactAmount = holding.quantity * quote.changeAmount * effectiveRate;
           

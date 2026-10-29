@@ -22,10 +22,34 @@ class YahooFinanceSearchResult {
 }
 
 class YahooFinanceService {
-  static const String _userAgent =
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '
-      'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 '
-      'Mobile/15E148 Safari/604.1';
+  // 야후 파이낸스 HTTP 429 차단을 회피하는 표준 User-Agent
+  static const String _userAgent = 'Mozilla/5.0';
+
+  Future<http.Response> _yahooGet(Uri uri, {Duration timeout = const Duration(seconds: 4)}) async {
+    try {
+      final res = await http.get(uri, headers: {
+        'User-Agent': _userAgent,
+        'Accept': 'application/json,text/plain,*/*',
+      }).timeout(timeout);
+      if (res.statusCode == 200) return res;
+    } catch (_) {}
+
+    // query2 실패 시 query1으로 자동 폴백
+    try {
+      final fallbackHost = uri.host.contains('query2')
+          ? uri.host.replaceFirst('query2', 'query1')
+          : uri.host.replaceFirst('query1', 'query2');
+      if (fallbackHost != uri.host) {
+        final fallbackUri = uri.replace(host: fallbackHost);
+        return await http.get(fallbackUri, headers: {
+          'User-Agent': _userAgent,
+          'Accept': 'application/json,text/plain,*/*',
+        }).timeout(timeout);
+      }
+    } catch (_) {}
+
+    return http.Response('', 429);
+  }
 
   List<YahooFinanceSearchResult>? _localKoreanStocks;
 
@@ -457,10 +481,7 @@ class YahooFinanceService {
         'https://query2.finance.yahoo.com/v1/finance/search'
         '?q=${Uri.encodeComponent(query)}&quotesCount=10&newsCount=0',
       );
-      final response =
-          await http.get(url, headers: {'User-Agent': _userAgent}).timeout(
-        const Duration(seconds: 3),
-      );
+      final response = await _yahooGet(url, timeout: const Duration(seconds: 3));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final quotes = data['quotes'] as List<dynamic>? ?? [];
@@ -577,10 +598,7 @@ class YahooFinanceService {
       final url = Uri.parse(
         'https://query2.finance.yahoo.com/v8/finance/chart/${cleanBase}KRW=X',
       );
-      final response =
-          await http.get(url, headers: {'User-Agent': _userAgent}).timeout(
-        const Duration(seconds: 3),
-      );
+      final response = await _yahooGet(url, timeout: const Duration(seconds: 3));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final result = data['chart']?['result'] as List<dynamic>?;
@@ -630,9 +648,7 @@ class YahooFinanceService {
         final url = Uri.parse(
           'https://query2.finance.yahoo.com/v8/finance/chart/$cleanSymbol?range=2y&interval=1d&events=div',
         );
-        final response = await http.get(url, headers: {'User-Agent': _userAgent}).timeout(
-          const Duration(seconds: 4),
-        );
+        final response = await _yahooGet(url, timeout: const Duration(seconds: 4));
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           final result = data['chart']?['result'] as List<dynamic>?;
@@ -656,6 +672,47 @@ class YahooFinanceService {
         }
       } catch (_) {}
 
+      // 국내 ETF의 경우 야후에 배당이 없으면 네이버 ETF 공시/분석에서 보완
+      if (dividends.isEmpty) {
+        try {
+          final etfUrl = Uri.parse('https://m.stock.naver.com/api/stock/$code/etfAnalysis');
+          final etfRes = await http.get(etfUrl, headers: {'User-Agent': _userAgent}).timeout(
+            const Duration(seconds: 3),
+          );
+          if (etfRes.statusCode == 200) {
+            final etfData = jsonDecode(etfRes.body);
+            final divTtm = (etfData['dividendPerShareTtm'] as num?)?.toDouble() ?? 0.0;
+            if (divTtm > 0) {
+              final rawCount = (etfData['dividendCountThisYear'] as num?)?.toInt() ?? 0;
+              final now = DateTime.now();
+              int annualFreq = 12;
+              if (rawCount > 0 && now.month >= 4) {
+                final estimatedAnnual = (rawCount * 12 / now.month).round();
+                if (estimatedAnnual >= 8) {
+                  annualFreq = 12;
+                } else if (estimatedAnnual >= 3) {
+                  annualFreq = 4;
+                } else if (estimatedAnnual == 2) {
+                  annualFreq = 2;
+                } else {
+                  annualFreq = 1;
+                }
+              }
+              final perPayout = divTtm / annualFreq;
+              final stepMonths = 12 ~/ annualFreq;
+              final baseMonth = now.day < 28 ? now.month - 1 : now.month;
+              for (int i = 0; i < annualFreq; i++) {
+                final dt = DateTime(now.year, baseMonth - (i * stepMonths), 28);
+                dividends.add({
+                  'amount': perPayout,
+                  'date': dt.millisecondsSinceEpoch ~/ 1000,
+                });
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       if (naverPrice != null) {
         return {
           'price': naverPrice,
@@ -671,10 +728,7 @@ class YahooFinanceService {
         'https://query2.finance.yahoo.com/v8/finance/chart/$cleanSymbol'
         '?range=2y&interval=1d&events=div',
       );
-      final response =
-          await http.get(url, headers: {'User-Agent': _userAgent}).timeout(
-        const Duration(seconds: 4),
-      );
+      final response = await _yahooGet(url, timeout: const Duration(seconds: 4));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final result = data['chart']?['result'] as List<dynamic>?;
@@ -708,7 +762,7 @@ class YahooFinanceService {
 
     // 3. 해외 주식의 경우 네이버 해외주식 API 시도
     if (!isKoreanStock) {
-      for (final suffix in ['.O', '.N', '']) {
+      for (final suffix in ['.O', '.K', '.N', '']) {
         try {
           final naverWorldUrl = Uri.parse('https://api.stock.naver.com/stock/$cleanSymbol$suffix/basic');
           final response = await http.get(naverWorldUrl, headers: {'User-Agent': _userAgent}).timeout(
@@ -719,9 +773,10 @@ class YahooFinanceService {
             final closePriceStr = (data['closePrice'] as String?)?.replaceAll(',', '');
             if (closePriceStr != null) {
               final double price = double.parse(closePriceStr);
+              final cur = (data['currencyType']?['code'] as String?)?.toUpperCase() ?? 'USD';
               return {
                 'price': price,
-                'currency': 'USD',
+                'currency': cur,
                 'dividends': <Map<String, dynamic>>[],
               };
             }
@@ -783,9 +838,7 @@ class YahooFinanceService {
       final url = Uri.parse(
         'https://query2.finance.yahoo.com/v8/finance/chart/$cleanSymbol?range=1d&interval=1d',
       );
-      final response = await http.get(url, headers: {'User-Agent': _userAgent}).timeout(
-        const Duration(seconds: 4),
-      );
+      final response = await _yahooGet(url, timeout: const Duration(seconds: 4));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final result = data['chart']?['result'] as List<dynamic>?;
@@ -814,7 +867,7 @@ class YahooFinanceService {
 
     // 3. 해외 주식 네이버 API 폴백
     if (!isKoreanStock) {
-      for (final suffix in ['.O', '.N', '']) {
+      for (final suffix in ['.O', '.K', '.N', '']) {
         try {
           final naverWorldUrl = Uri.parse('https://api.stock.naver.com/stock/$cleanSymbol$suffix/basic');
           final response = await http.get(naverWorldUrl, headers: {'User-Agent': _userAgent}).timeout(
@@ -837,13 +890,14 @@ class YahooFinanceService {
                 if (ratio > 0) ratio = -ratio;
                 if (diff > 0) diff = -diff;
               }
+              final cur = (data['currencyType']?['code'] as String?)?.toUpperCase() ?? 'USD';
 
               return StockQuote(
                 symbol: cleanSymbol,
                 price: price,
                 changePercent: ratio,
                 changeAmount: diff,
-                currency: 'USD',
+                currency: cur,
               );
             }
           }
@@ -893,9 +947,7 @@ class YahooFinanceService {
         'https://query2.finance.yahoo.com/v8/finance/chart/$cleanSymbol'
         '?range=$range&interval=$interval',
       );
-      final response = await http.get(url, headers: {'User-Agent': _userAgent}).timeout(
-        const Duration(seconds: 5),
-      );
+      final response = await _yahooGet(url, timeout: const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

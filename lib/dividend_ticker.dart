@@ -1,43 +1,40 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 
 class DailyDividendTicker extends StatefulWidget {
   const DailyDividendTicker({
     super.key,
     required this.annualTotal,
+    this.isActive = true,
   });
 
   final double annualTotal;
+  final bool isActive;
 
   @override
   State<DailyDividendTicker> createState() => _DailyDividendTickerState();
 }
 
 class _DailyDividendTickerState extends State<DailyDividendTicker>
-    with TickerProviderStateMixin {
-  late Ticker _ticker;
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  Timer? _timer;
   late AnimationController _blinkController;
   late Animation<double> _blinkAnimation;
-  
+
   double _currentEarned = 0.0;
+  String _lastRenderedText = '';
   bool _isExpanded = false;
+  bool _isAppResumed = true;
 
   @override
   void initState() {
     super.initState();
-    _updateTick(); // 초기값 세팅
+    WidgetsBinding.instance.addObserver(this);
 
-    // Ticker를 사용해 초당 60번(주사율에 맞춰) 부드럽게 화면 갱신
-    _ticker = createTicker((elapsed) {
-      _updateTick();
-    });
-    _ticker.start();
-
-    // LIVE 점 및 상승 화살표 깜빡임 애니메이션 (크기 변화 없이 투명도만 선명하게 깜빡임)
     _blinkController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 650),
-    )..repeat(reverse: true);
+    );
 
     _blinkAnimation = Tween<double>(begin: 0.05, end: 1.0).animate(
       CurvedAnimation(
@@ -45,36 +42,76 @@ class _DailyDividendTickerState extends State<DailyDividendTicker>
         curve: Curves.easeInOut,
       ),
     );
+
+    _updateTick(force: true);
+    _syncRunningState();
   }
 
-  void _updateTick() {
+  @override
+  void didUpdateWidget(covariant DailyDividendTicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.annualTotal != widget.annualTotal) {
+      _updateTick(force: true);
+    }
+    if (oldWidget.isActive != widget.isActive ||
+        oldWidget.annualTotal != widget.annualTotal) {
+      _syncRunningState();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final resumed = state == AppLifecycleState.resumed;
+    if (_isAppResumed != resumed) {
+      _isAppResumed = resumed;
+      _syncRunningState();
+    }
+  }
+
+  void _syncRunningState() {
+    final shouldRun = widget.isActive && widget.annualTotal > 0 && _isAppResumed;
+    if (shouldRun) {
+      if (_timer == null || !_timer!.isActive) {
+        _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+          _updateTick();
+        });
+      }
+      if (!_blinkController.isAnimating) {
+        _blinkController.repeat(reverse: true);
+      }
+    } else {
+      _timer?.cancel();
+      _timer = null;
+      if (_blinkController.isAnimating) {
+        _blinkController.stop();
+      }
+    }
+  }
+
+  void _updateTick({bool force = false}) {
     final now = DateTime.now();
-    // 오늘 0시 정각
     final midnight = DateTime(now.year, now.month, now.day);
-
-    // 1년 = 365일
     const double secondsInYear = 365.0 * 24.0 * 60.0 * 60.0;
-
-    // 1초당 벌어들이는 금액
     final double earnPerSecond = widget.annualTotal / secondsInYear;
-
-    // 오늘 자정부터 지금까지 흐른 밀리초 단위 시간
     final double elapsedSeconds =
         now.difference(midnight).inMilliseconds / 1000.0;
-
-    // 현재까지 누적된 금액
     final newEarned = elapsedSeconds * earnPerSecond;
 
-    if (mounted) {
-      setState(() {
-        _currentEarned = newEarned;
-      });
+    final currentRendered = _formatNumber(newEarned, decimals: 0);
+    if (force || currentRendered != _lastRenderedText) {
+      _lastRenderedText = currentRendered;
+      if (mounted) {
+        setState(() {
+          _currentEarned = newEarned;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
-    _ticker.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
     _blinkController.dispose();
     super.dispose();
   }

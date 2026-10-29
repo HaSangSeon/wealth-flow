@@ -22,12 +22,14 @@ class DividendTab extends StatefulWidget {
     required this.holdings,
     required this.onPremiumChanged,
     this.onDataRestored,
+    this.isActive = true,
   });
 
   final StorageService storage;
   final List<Holding> holdings;
   final VoidCallback onPremiumChanged;
   final VoidCallback? onDataRestored;
+  final bool isActive;
 
   @override
   State<DividendTab> createState() => _DividendTabState();
@@ -45,6 +47,21 @@ class _DividendTabState extends State<DividendTab> {
   void initState() {
     super.initState();
     _selectedDay = DateTime.now();
+  }
+
+  @override
+  void didUpdateWidget(covariant DividendTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_selectedMonth != null && oldWidget.holdings != widget.holdings) {
+      final updated = calculateDividendData(
+        holdings: widget.holdings,
+        lastExchangeRate: widget.storage.lastExchangeRate,
+        applyTax: _applyTax,
+      );
+      if ((updated.monthlyDividends[_selectedMonth] ?? 0.0) <= 0) {
+        _selectedMonth = null;
+      }
+    }
   }
 
   Widget _buildTabToggle(bool isDark) {
@@ -145,7 +162,7 @@ class _DividendTabState extends State<DividendTab> {
 
     final filteredDividends = _selectedMonth == null 
         ? data.allDividends.take(15).toList() 
-        : data.allDividends.where((d) => d.paymentDate.month == _selectedMonth).toList();
+        : data.allDividends.where((d) => !d.isHistorical && d.paymentDate.month == _selectedMonth).toList();
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -211,6 +228,7 @@ class _DividendTabState extends State<DividendTab> {
                             dividendYield: dividendYield,
                             applyTax: _applyTax,
                             onApplyTaxChanged: (val) => setState(() => _applyTax = val),
+                            isActive: widget.isActive && !_showCalendar,
                           ),
                           const SizedBox(height: 16),
                           DividendFlowBarChart(

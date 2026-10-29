@@ -106,7 +106,7 @@ class ScenarioPanel extends StatelessWidget {
           SliderField(
             label: '연평균 주가 상승률',
             valueLabel: '${annualReturn.toStringAsFixed(1)}%',
-            value: annualReturn,
+            value: annualReturn.clamp(-10.0, 20.0),
             min: -10,
             max: 20,
             divisions: 60,
@@ -121,7 +121,7 @@ class ScenarioPanel extends StatelessWidget {
           SliderField(
             label: '월 추가 투자금',
             valueLabel: formatCurrencyFull(monthlyContribution),
-            value: monthlyContribution,
+            value: monthlyContribution.clamp(0.0, 5000000.0),
             min: 0,
             max: 5000000,
             divisions: 50,

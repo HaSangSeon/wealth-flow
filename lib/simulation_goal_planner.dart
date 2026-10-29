@@ -15,6 +15,7 @@ class GoalPlannerView extends StatelessWidget {
     required this.onTargetAmountChanged,
     required this.onMonthlyContributionChanged,
     required this.onAnnualReturnChanged,
+    this.onYearsChanged,
     this.onTargetYearsChanged,
     this.onDividendYieldChanged,
     this.onContributionGrowthChanged,
@@ -33,6 +34,7 @@ class GoalPlannerView extends StatelessWidget {
   final ValueChanged<double> onTargetAmountChanged;
   final ValueChanged<double> onMonthlyContributionChanged;
   final ValueChanged<double> onAnnualReturnChanged;
+  final ValueChanged<int>? onYearsChanged;
   final ValueChanged<int>? onTargetYearsChanged;
   final ValueChanged<double>? onDividendYieldChanged;
   final ValueChanged<double>? onContributionGrowthChanged;
@@ -245,7 +247,7 @@ class GoalPlannerView extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Slider(
-                value: targetAmount,
+                value: targetAmount.clamp(10000000.0, 5000000000.0),
                 min: 10000000.0,
                 max: 5000000000.0,
                 divisions: 499,
@@ -412,6 +414,7 @@ class GoalPlannerView extends StatelessWidget {
                 description: '은퇴/목표 시점을 $diff년 더 늘려서 목표 연도를 ${currentYear + reqYears}년으로 설정해보세요.',
                 buttonText: '적용',
                 onTap: () {
+                  onYearsChanged?.call(reqYears.clamp(1, 50));
                   onTargetYearsChanged?.call(currentYear + reqYears);
                 },
               );
@@ -474,6 +477,7 @@ class GoalPlannerView extends StatelessWidget {
                 description: '현재 자산 납입 페이스로는 목표를 $diff년 단축하여 ${currentYear + minYears}년에 조기 달성할 수 있습니다.',
                 buttonText: '조정',
                 onTap: () {
+                  onYearsChanged?.call(minYears.clamp(1, 50));
                   onTargetYearsChanged?.call(currentYear + minYears);
                 },
               );

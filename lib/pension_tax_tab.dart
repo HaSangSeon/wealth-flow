@@ -32,6 +32,7 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
   // 연금 수령 전략 상태
   double _targetPensionTotal = 300000000;
   int _payoutYears = 20;
+  String? _loadedProfileId;
 
   @override
   void initState() {
@@ -42,11 +43,14 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
   @override
   void didUpdateWidget(covariant PensionTaxTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 프로필 전환 등 부모 위젯 리빌드 시 최신 세팅을 다시 불러오기 위함
-    _loadSavedSettings();
+    // 프로필 전환 시 최신 세팅을 다시 불러오기 위함
+    if (_loadedProfileId != widget.storage.activeProfileId) {
+      _loadSavedSettings();
+    }
   }
 
   void _loadSavedSettings() {
+    _loadedProfileId = widget.storage.activeProfileId;
     final settings = widget.storage.loadPensionSettings();
     _incomeUnder55 = settings.incomeUnder55;
     _annualContributionPension = settings.annualContributionPension;
@@ -582,7 +586,7 @@ class _PensionTaxTabState extends State<PensionTaxTab> {
                             ),
                           ),
                           const SizedBox(height: 18),
-                          if (pensionSum + irpSum > 0) ...[
+                          if (pensionSum + irpSum > 0 || _targetPensionTotal != 300000000) ...[
                             Align(
                               alignment: Alignment.centerRight,
                               child: InkWell(

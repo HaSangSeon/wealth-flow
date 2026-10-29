@@ -6,10 +6,12 @@ import 'common_widgets.dart';
 import 'simulation_chart.dart';
 import 'simulation_table.dart';
 import 'simulation_scenario_panel.dart';
+import 'simulation_goal_planner.dart';
 
 export 'simulation_scenario_panel.dart';
 export 'simulation_chart.dart';
 export 'simulation_table.dart';
+export 'simulation_goal_planner.dart';
 
 class SimulationTab extends StatefulWidget {
   const SimulationTab({
@@ -64,17 +66,101 @@ class SimulationTab extends StatefulWidget {
 }
 
 class _SimulationTabState extends State<SimulationTab> {
+  bool _showGoalPlanner = false;
+
+  Widget _buildModeToggle(bool isDark) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF0EFEF),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Stack(
+        children: [
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            alignment: _showGoalPlanner ? Alignment.centerRight : Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              child: Container(
+                margin: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (_showGoalPlanner) setState(() => _showGoalPlanner = false);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Text(
+                      '복리 시뮬레이션',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: !_showGoalPlanner ? FontWeight.bold : FontWeight.normal,
+                        color: !_showGoalPlanner
+                            ? (isDark ? Colors.white : Colors.black87)
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (!_showGoalPlanner) setState(() => _showGoalPlanner = true);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Text(
+                      '은퇴 목표 설정',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: _showGoalPlanner ? FontWeight.bold : FontWeight.normal,
+                        color: _showGoalPlanner
+                            ? (isDark ? Colors.white : Colors.black87)
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     double actualDividendYield = 0.0;
+    double actualMonthlyDividend = 0.0;
     if (widget.holdings != null && widget.holdings!.isNotEmpty) {
       final divData = calculateDividendData(
         holdings: widget.holdings!,
         lastExchangeRate: widget.storage.lastExchangeRate,
         applyTax: false,
       );
+      actualMonthlyDividend = divData.annualTotal / 12;
       if (divData.totalStockValuation > 0) {
         actualDividendYield =
             (divData.annualTotal / divData.totalStockValuation) * 100;
@@ -129,32 +215,55 @@ class _SimulationTabState extends State<SimulationTab> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
-                    _Header(
-                      currentValue: widget.currentValue,
-                      projectedValue: widget.projectedValue,
-                      years: widget.years,
-                      gain: widget.gain,
-                    ),
                     const SizedBox(height: 16),
-                    ScenarioPanel(
-                      annualReturn: widget.annualReturn,
-                      dividendYield: widget.dividendYield,
-                      actualDividendYield: actualDividendYield,
-                      monthlyContribution: widget.monthlyContribution,
-                      contributionGrowth: widget.contributionGrowth,
-                      years: widget.years,
-                      onAnnualReturnChanged: widget.onAnnualReturnChanged,
-                      onDividendYieldChanged: widget.onDividendYieldChanged,
-                      onMonthlyContributionChanged: widget.onMonthlyContributionChanged,
-                      onContributionGrowthChanged: widget.onContributionGrowthChanged,
-                      onYearsChanged: widget.onYearsChanged,
-                    ),
-                    const SizedBox(height: 16),
-                    ProjectionChart(points: widget.projectionPoints),
-                    const SizedBox(height: 16),
-                    ProjectionTable(points: widget.projectionPoints),
-                    const SizedBox(height: 28),
+                    _buildModeToggle(isDark),
+                    if (!_showGoalPlanner) ...[
+                      const SizedBox(height: 16),
+                      _Header(
+                        currentValue: widget.currentValue,
+                        projectedValue: widget.projectedValue,
+                        years: widget.years,
+                        gain: widget.gain,
+                      ),
+                      const SizedBox(height: 16),
+                      ScenarioPanel(
+                        annualReturn: widget.annualReturn,
+                        dividendYield: widget.dividendYield,
+                        actualDividendYield: actualDividendYield,
+                        monthlyContribution: widget.monthlyContribution,
+                        contributionGrowth: widget.contributionGrowth,
+                        years: widget.years,
+                        onAnnualReturnChanged: widget.onAnnualReturnChanged,
+                        onDividendYieldChanged: widget.onDividendYieldChanged,
+                        onMonthlyContributionChanged: widget.onMonthlyContributionChanged,
+                        onContributionGrowthChanged: widget.onContributionGrowthChanged,
+                        onYearsChanged: widget.onYearsChanged,
+                      ),
+                      const SizedBox(height: 16),
+                      ProjectionChart(points: widget.projectionPoints),
+                      const SizedBox(height: 16),
+                      ProjectionTable(points: widget.projectionPoints),
+                      const SizedBox(height: 28),
+                    ] else ...[
+                      GoalPlannerView(
+                        currentValue: widget.currentValue,
+                        targetAmount: widget.targetAmount,
+                        years: widget.years,
+                        targetYears: widget.targetYears,
+                        annualReturn: widget.annualReturn,
+                        dividendYield: widget.dividendYield,
+                        monthlyContribution: widget.monthlyContribution,
+                        contributionGrowth: widget.contributionGrowth,
+                        actualMonthlyDividend: actualMonthlyDividend,
+                        onTargetAmountChanged: widget.onTargetAmountChanged,
+                        onMonthlyContributionChanged: widget.onMonthlyContributionChanged,
+                        onAnnualReturnChanged: widget.onAnnualReturnChanged,
+                        onYearsChanged: widget.onYearsChanged,
+                        onTargetYearsChanged: widget.onTargetYearsChanged,
+                        onDividendYieldChanged: widget.onDividendYieldChanged,
+                        onContributionGrowthChanged: widget.onContributionGrowthChanged,
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -29,16 +29,42 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
   final ValueNotifier<List<YahooFinanceSearchResult>> _searchResults =
       ValueNotifier([]);
   String _lastSearchQuery = '';
+  int _lastMatchedResultsCount = 0;
+  bool _isSearching = false;
   String? _selectedSymbol;
+
+  static bool _isExplicitCashName(String raw) {
+    final norm = raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    if (norm.isEmpty) return false;
+
+    const etfOrStockMarkers = [
+      'etf', 'kodex', 'tiger', 'ace', 'sol', 'rise', 'plus',
+      'kiwoom', 'koact', 'kosef', 'timefolio', 'hanaro', 'arirang',
+      'kbstar', '1q', 'hero', '코덱스', '타이거', '선물', '액티브',
+      '현금흐름', '인버스', '레버리지',
+    ];
+    if (etfOrStockMarkers.any((m) => norm.contains(m))) {
+      return false;
+    }
+
+    const cashTerms = [
+      '현금', '예금', '적금', '예수금', '파킹통장', '통장', '비상금',
+      '청약', '주택청약', '보증금', '생활비', '대기자금', '여유자금',
+      '목돈', '용돈', '지갑', '발행어음', '원화', '외화예금', '달러예금',
+      'cma', 'mmf', 'rp', 'cash', '기타',
+    ];
+    return cashTerms.any((term) => norm == term || norm.endsWith(term));
+  }
 
   @override
   void initState() {
     super.initState();
     _nameController =
         TextEditingController(text: widget.initialHolding?.name ?? '');
+    _lastSearchQuery = widget.initialHolding?.name ?? '';
     _quantityController = TextEditingController(
       text: widget.initialHolding != null
-          ? formatNumber(widget.initialHolding!.quantity)
+          ? formatFullPrecision(widget.initialHolding!.quantity)
           : '',
     );
     _priceController = TextEditingController(
@@ -84,13 +110,19 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
   }
 
   void _onSearchQueryChanged(String query) async {
-    if (query.trim().isEmpty) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
       _searchResults.value = [];
+      _lastMatchedResultsCount = 0;
+      _isSearching = false;
       _lastSearchQuery = query;
       setState(() {
         _selectedSymbol = null;
-        _type = AssetType.cash;
-        _priceController.text = '1';
+        _type = (widget.initialHolding != null &&
+                widget.initialHolding!.type != AssetType.cash)
+            ? widget.initialHolding!.type
+            : AssetType.cash;
+        _priceController.text = _type == AssetType.cash ? '1' : '0';
         _currency = null;
         _originalPrice = null;
         _dividends = null;
@@ -100,28 +132,80 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
     if (query == _lastSearchQuery) return;
     _lastSearchQuery = query;
 
+    final isExplicitCash = _isExplicitCashName(trimmed);
+
     if (_selectedSymbol != null) {
       setState(() {
         _selectedSymbol = null;
-        _type = AssetType.cash;
-        _priceController.text = '1';
+        _type = isExplicitCash
+            ? AssetType.cash
+            : (widget.initialHolding != null &&
+                    widget.initialHolding!.type != AssetType.cash
+                ? widget.initialHolding!.type
+                : AssetType.koreanStock);
+        _priceController.text = _type == AssetType.cash ? '1' : '0';
         _currency = null;
         _originalPrice = null;
+        _dividends = null;
+      });
+    } else if (isExplicitCash && _type != AssetType.cash) {
+      setState(() {
+        _type = AssetType.cash;
+        _priceController.text = '1';
       });
     }
 
+    _isSearching = true;
     final results = await _yahooService.searchStocks(query);
     if (_lastSearchQuery == query && mounted) {
+      _isSearching = false;
+      _lastMatchedResultsCount = results.length;
       _searchResults.value = results;
+
+      if (_selectedSymbol == null) {
+        if (isExplicitCash) {
+          if (_type != AssetType.cash) {
+            setState(() {
+              _type = AssetType.cash;
+              _priceController.text = '1';
+            });
+          }
+        } else if (results.isNotEmpty) {
+          if (_type == AssetType.cash) {
+            setState(() {
+              _type = AssetType.koreanStock;
+              _priceController.text = '0';
+            });
+          }
+        } else if (widget.initialHolding == null ||
+            widget.initialHolding!.type == AssetType.cash) {
+          if (!RegExp(r'^[A-Za-z0-9.\-]+$').hasMatch(trimmed) &&
+              _type != AssetType.cash) {
+            setState(() {
+              _type = AssetType.cash;
+              _priceController.text = '1';
+            });
+          }
+        }
+      }
     }
   }
 
   Future<void> _onSelectSearchResult(YahooFinanceSearchResult result) async {
     if (!mounted) return;
     FocusScope.of(context).unfocus();
+    final isKr = result.symbol.endsWith('.KS') || result.symbol.endsWith('.KQ');
     setState(() {
       _nameController.text = result.shortname;
+      _lastSearchQuery = result.shortname;
       _selectedSymbol = result.symbol;
+      _priceController.text = '0';
+      _originalPrice = null;
+      _currency = isKr ? 'KRW' : 'USD';
+      _dividends = null;
+      _type = result.quoteType == 'ETF'
+          ? AssetType.etf
+          : (isKr ? AssetType.koreanStock : AssetType.usStock);
       _searchResults.value = [];
     });
     _isLoadingPrice.value = true;
@@ -148,6 +232,8 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
               _dividends = (details['dividends'] as List<dynamic>)
                   .map((d) => Map<String, dynamic>.from(d as Map))
                   .toList();
+            } else {
+              _dividends = [];
             }
 
             if (currency == 'KRW') {
@@ -159,6 +245,16 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
             }
           });
         }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('시세 정보를 불러오지 못했습니다. 네트워크 확인 후 다시 선택해주세요.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('시세 정보를 불러오지 못했습니다. 네트워크 확인 후 다시 선택해주세요.')),
+        );
       }
     } finally {
       if (mounted) {
@@ -324,12 +420,28 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
                       ),
                       onChanged: _onSearchQueryChanged,
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
+                        final trimmed = (value ?? '').trim();
+                        if (trimmed.isEmpty) {
                           return '종목명을 입력해주세요';
                         }
-                        if (widget.initialHolding == null ||
-                            _nameController.text.trim() != widget.initialHolding!.name) {
-                          if (_selectedSymbol == null && _type != AssetType.cash) {
+                        if (_selectedSymbol == null) {
+                          if (_isExplicitCashName(trimmed)) {
+                            return null;
+                          }
+                          if (widget.initialHolding != null &&
+                              (widget.initialHolding!.symbol == null ||
+                                  widget.initialHolding!.symbol!.isEmpty) &&
+                              trimmed == widget.initialHolding!.name) {
+                            return null;
+                          }
+                          final isAsciiCodeLike =
+                              RegExp(r'^[A-Za-z0-9.\-]+$').hasMatch(trimmed);
+                          final canTreatAsCustomCash = !_isSearching &&
+                              _lastMatchedResultsCount == 0 &&
+                              !isAsciiCodeLike &&
+                              (widget.initialHolding == null ||
+                                  widget.initialHolding!.type == AssetType.cash);
+                          if (!canTreatAsCustomCash) {
                             return '검색 결과 목록에서 종목을 선택해주세요';
                           }
                         }
@@ -611,27 +723,34 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
                     const SizedBox(height: 18),
 
                     // ── 5. 저장 / 등록 버튼 ──
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: FilledButton(
-                        onPressed: _submit,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _isLoadingPrice,
+                      builder: (context, isLoading, _) {
+                        return SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: FilledButton(
+                            onPressed: isLoading ? null : _submit,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              isLoading
+                                  ? '시세 불러오는 중...'
+                                  : (widget.initialHolding == null ? '자산 추가하기' : '변경사항 저장하기'),
+                              style: const TextStyle(
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          widget.initialHolding == null ? '자산 추가하기' : '변경사항 저장하기',
-                          style: const TextStyle(
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -750,23 +869,51 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
   }
 
   void _submit() {
+    if (_isLoadingPrice.value) return;
     if (!_formKey.currentState!.validate()) return;
     if (_type == null || _account == null) return;
 
+    final trimmedName = _nameController.text.trim();
+    final isLegacySymbollessStock = widget.initialHolding != null &&
+        (widget.initialHolding!.symbol == null ||
+            widget.initialHolding!.symbol!.isEmpty) &&
+        widget.initialHolding!.type != AssetType.cash &&
+        trimmedName == widget.initialHolding!.name;
+    final isCashAsset =
+        (_selectedSymbol == null || _selectedSymbol!.isEmpty) &&
+            !isLegacySymbollessStock;
+
+    final effectiveType = isCashAsset ? AssetType.cash : _type!;
     final quantity = double.parse(_quantityController.text.replaceAll(',', ''));
-    final price = double.parse(_priceController.text.replaceAll(',', ''));
+    final price = isCashAsset
+        ? 1.0
+        : (double.tryParse(_priceController.text.replaceAll(',', '')) ?? 0.0);
+
+    if (!isCashAsset && price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('종목 시세를 불러오지 못해 저장할 수 없습니다. 다시 검색해 선택해주세요.')),
+      );
+      return;
+    }
+
+    final effectiveDividends = isCashAsset
+        ? null
+        : (_dividends ??
+            (_selectedSymbol == widget.initialHolding?.symbol
+                ? widget.initialHolding?.dividends
+                : null));
 
     Navigator.of(context).pop(
       Holding(
-        name: _nameController.text.trim(),
-        symbol: _selectedSymbol,
-        type: _type!,
+        name: trimmedName,
+        symbol: isCashAsset ? null : _selectedSymbol,
+        type: effectiveType,
         account: _account!,
         quantity: quantity,
         price: price,
-        originalPrice: _originalPrice,
-        currency: _currency,
-        dividends: _dividends ?? widget.initialHolding?.dividends,
+        originalPrice: isCashAsset ? null : _originalPrice,
+        currency: isCashAsset ? null : _currency,
+        dividends: effectiveDividends,
       ),
     );
   }

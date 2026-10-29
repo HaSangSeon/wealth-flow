@@ -11,6 +11,7 @@ class DividendSummaryHeader extends StatelessWidget {
     required this.dividendYield,
     required this.applyTax,
     required this.onApplyTaxChanged,
+    this.isActive = true,
   });
 
   final double annualTotal;
@@ -18,6 +19,7 @@ class DividendSummaryHeader extends StatelessWidget {
   final double dividendYield;
   final bool applyTax;
   final ValueChanged<bool> onApplyTaxChanged;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -233,7 +235,7 @@ class DividendSummaryHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          DailyDividendTicker(annualTotal: annualTotal),
+          DailyDividendTicker(annualTotal: annualTotal, isActive: isActive),
         ],
       ),
     );
@@ -435,8 +437,10 @@ class DividendFlowBarChart extends StatelessWidget {
 
                     return GestureDetector(
                       onTap: () {
-                        if (val > 0) {
-                          onMonthSelected(isSelected ? null : month);
+                        if (isSelected) {
+                          onMonthSelected(null);
+                        } else if (val > 0) {
+                          onMonthSelected(month);
                         }
                       },
                       child: Column(

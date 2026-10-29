@@ -445,7 +445,7 @@ class DividendPortfolioList extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${summary.symbol} | 예상 지급월: ${summary.paymentMonths.join(', ')}월',
+                        '${summary.symbol.isNotEmpty ? '${summary.symbol} · ' : ''}${summary.accountLabel} | 예상 지급월: ${summary.paymentMonths.join(', ')}월',
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

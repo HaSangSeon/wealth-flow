@@ -710,6 +710,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
   late List<Holding> _holdings;
   late SimulationSettings _settings;
   bool _isSyncing = false;
+  bool _pendingResync = false;
 
   @override
   void initState() {
@@ -805,30 +806,43 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
   }
 
   Future<void> _syncPrices() async {
-    if (_isSyncing) return;
+    if (_isSyncing) {
+      _pendingResync = true;
+      return;
+    }
+    final syncProfileId = widget.storage.activeProfileId;
     setState(() => _isSyncing = true);
 
-    final yahooService = YahooFinanceService();
-
-    // Always fetch the latest USD-KRW exchange rate first on sync
     try {
-      final double? usdRate = await yahooService.fetchExchangeRate('USD');
-      if (usdRate != null) {
-        widget.storage.lastExchangeRate = usdRate;
-      }
-    } catch (e) {
-      debugPrint("Failed to fetch USD exchange rate: $e");
-    }
+      final yahooService = YahooFinanceService();
 
-    bool hasUpdates = false;
-    
-    for (int i = 0; i < _holdings.length; i++) {
-      final holding = _holdings[i];
-      if (holding.symbol != null && 
-          (holding.type == AssetType.usStock || holding.type == AssetType.koreanStock || holding.type == AssetType.etf)) {
-        final detailsFuture = yahooService.fetchStockDetails(holding.symbol!);
-        
-        final details = await detailsFuture;
+      // Always fetch the latest USD-KRW exchange rate first on sync
+      try {
+        final double? usdRate = await yahooService.fetchExchangeRate('USD');
+        if (usdRate != null && widget.storage.activeProfileId == syncProfileId) {
+          widget.storage.lastExchangeRate = usdRate;
+        }
+      } catch (e) {
+        debugPrint("Failed to fetch USD exchange rate: $e");
+      }
+
+      // 동기화 시작 시점의 고유 심볼 목록 추출 (중간에 자산 추가/수정/삭제 시 인덱스 밀림 방지)
+      final symbolsToSync = _holdings
+          .where((h) =>
+              h.symbol != null &&
+              h.symbol!.isNotEmpty &&
+              (h.type == AssetType.usStock ||
+                  h.type == AssetType.koreanStock ||
+                  h.type == AssetType.etf))
+          .map((h) => h.symbol!)
+          .toSet();
+
+      final Map<String, ({double price, double rawPrice, String currency, List<Map<String, dynamic>>? dividends})> syncedQuotes = {};
+
+      for (final symbol in symbolsToSync) {
+        if (!mounted || widget.storage.activeProfileId != syncProfileId) return;
+
+        final details = await yahooService.fetchStockDetails(symbol);
         if (details != null && details['price'] != null) {
           final rawPrice = (details['price'] as num).toDouble();
           final currency = (details['currency'] as String?)?.toUpperCase() ?? 'USD';
@@ -838,61 +852,84 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
             double? exchangeRate = await yahooService.fetchExchangeRate(currency);
             exchangeRate ??= yahooService.getFallbackExchangeRate(currency);
             price = rawPrice * exchangeRate;
-            if (currency == 'USD') {
+            if (currency == 'USD' && widget.storage.activeProfileId == syncProfileId) {
               widget.storage.lastExchangeRate = exchangeRate;
             }
           }
 
           final fetchedDividends = details['dividends'] as List<Map<String, dynamic>>?;
-          List<Map<String, dynamic>>? newDividends = fetchedDividends;
-
-          // API 오류나 일시적 통신 지연으로 빈 배열 반환 시 기존 배당 내역 유지
-          if ((newDividends == null || newDividends.isEmpty) && 
-              holding.dividends != null && 
-              holding.dividends!.isNotEmpty) {
-            newDividends = holding.dividends;
-          }
-
-          bool dividendsChanged = false;
-          if (holding.dividends?.length != newDividends?.length) {
-            dividendsChanged = true;
-          } else if (holding.dividends != null && newDividends != null) {
-            for (int j = 0; j < holding.dividends!.length; j++) {
-              if (holding.dividends![j]['date'] != newDividends[j]['date'] ||
-                  holding.dividends![j]['amount'] != newDividends[j]['amount']) {
-                dividendsChanged = true;
-                break;
-              }
-            }
-          }
-
-          if (holding.price != price || 
-              holding.originalPrice != rawPrice || 
-              holding.currency != currency ||
-              dividendsChanged) {
-            _holdings[i].price = price;
-            _holdings[i].originalPrice = rawPrice;
-            _holdings[i].currency = currency;
-            if (dividendsChanged) {
-              _holdings[i].dividends = newDividends;
-            }
-            hasUpdates = true;
-          }
+          syncedQuotes[symbol] = (
+            price: price,
+            rawPrice: rawPrice,
+            currency: currency,
+            dividends: fetchedDividends,
+          );
         }
       }
-    }
-    
-    if (hasUpdates) {
-      _holdings = List.from(_holdings);
-      if (mounted) {
+
+      if (!mounted || widget.storage.activeProfileId != syncProfileId) return;
+
+      bool hasUpdates = false;
+      for (final holding in _holdings) {
+        final symbol = holding.symbol;
+        if (symbol == null || !syncedQuotes.containsKey(symbol)) continue;
+
+        final quote = syncedQuotes[symbol]!;
+        List<Map<String, dynamic>>? newDividends = quote.dividends;
+
+        // API 오류나 일시적 통신 지연으로 빈 배열 반환 시 기존 배당 내역 유지
+        if ((newDividends == null || newDividends.isEmpty) &&
+            holding.dividends != null &&
+            holding.dividends!.isNotEmpty) {
+          newDividends = holding.dividends;
+        }
+
+        bool dividendsChanged = false;
+        if (holding.dividends?.length != newDividends?.length) {
+          dividendsChanged = true;
+        } else if (holding.dividends != null && newDividends != null) {
+          for (int j = 0; j < holding.dividends!.length; j++) {
+            if (holding.dividends![j]['date'] != newDividends[j]['date'] ||
+                holding.dividends![j]['amount'] != newDividends[j]['amount']) {
+              dividendsChanged = true;
+              break;
+            }
+          }
+        }
+
+        if (holding.price != quote.price ||
+            holding.originalPrice != quote.rawPrice ||
+            holding.currency != quote.currency ||
+            dividendsChanged) {
+          holding.price = quote.price;
+          holding.originalPrice = quote.rawPrice;
+          holding.currency = quote.currency;
+          if (dividendsChanged) {
+            holding.dividends = newDividends;
+          }
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates && mounted) {
+        setState(() {
+          _holdings = List.from(_holdings);
+        });
         _saveAll();
       }
+      widget.storage.lastSyncedAt = DateTime.now();
+      portfolioNewsKey.currentState?.fetchNews();
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      } else {
+        _isSyncing = false;
+      }
+      if (_pendingResync && mounted) {
+        _pendingResync = false;
+        _syncPrices();
+      }
     }
-    widget.storage.lastSyncedAt = DateTime.now();
-    if (mounted) {
-      setState(() => _isSyncing = false);
-    }
-    portfolioNewsKey.currentState?.fetchNews();
   }
 
   void _saveAll() {
@@ -927,11 +964,31 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
   double get _currentValue =>
       _holdings.fold(0, (previous, holding) => previous + holding.value);
 
-  List<ProjectionPoint> get _projection => calculateProjectionPoints(
+  double get _actualDividendYield {
+    if (_holdings.isEmpty) return 0.0;
+    final divData = calculateDividendData(
+      holdings: _holdings,
+      lastExchangeRate: widget.storage.lastExchangeRate,
+      applyTax: false,
+    );
+    if (divData.totalStockValuation > 0) {
+      return (divData.annualTotal / divData.totalStockValuation) * 100;
+    }
+    return 0.0;
+  }
+
+  double get _effectiveDividendYield {
+    if (_settings.dividendYield <= 0) return 0.0;
+    final actual = _actualDividendYield;
+    return actual > 0 ? actual : 3.0;
+  }
+
+  List<ProjectionPoint> _buildProjection(double dividendYieldPercent) =>
+      calculateProjectionPoints(
         initialAsset: _currentValue,
         monthlyContribution: _settings.monthlyContribution,
         annualReturnPercent: _settings.annualReturn,
-        dividendYieldPercent: _settings.dividendYield,
+        dividendYieldPercent: dividendYieldPercent,
         contributionGrowthPercent: _settings.contributionGrowth,
         years: _settings.years,
       );
@@ -940,7 +997,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final projectedValue = _projection.isEmpty ? 0.0 : _projection.last.total;
+    final effectiveDividendYield = _effectiveDividendYield;
+    final projectionPoints = _buildProjection(effectiveDividendYield);
+    final projectedValue = projectionPoints.isEmpty ? 0.0 : projectionPoints.last.total;
     final gain = projectedValue - _currentValue;
 
     return Scaffold(
@@ -973,6 +1032,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                 holdings: _holdings,
                 onPremiumChanged: () => setState(() {}),
                 onDataRestored: _loadDataForProfile,
+                isActive: _currentIndex == 1,
               ),
               SimulationTab(
                 storage: widget.storage,
@@ -982,10 +1042,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                 years: _settings.years,
                 gain: gain,
                 annualReturn: _settings.annualReturn,
-                dividendYield: _settings.dividendYield,
+                dividendYield: effectiveDividendYield,
                 monthlyContribution: _settings.monthlyContribution,
                 contributionGrowth: _settings.contributionGrowth,
-                projectionPoints: _projection,
+                projectionPoints: projectionPoints,
                 targetAmount: _settings.targetAmount,
                 targetYears: _settings.targetYears,
                 onAnnualReturnChanged: (v) => setState(() {
@@ -1239,6 +1299,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     );
 
     if (holding != null && mounted) {
+      if (holding.currency == 'USD' &&
+          holding.originalPrice != null &&
+          holding.originalPrice! > 0 &&
+          holding.price > 0) {
+        widget.storage.lastExchangeRate = holding.price / holding.originalPrice!;
+      }
+
       final existingIndex = _holdings.indexWhere((h) =>
           h.account == holding.account &&
           ((holding.symbol?.isNotEmpty == true && h.symbol == holding.symbol) ||
@@ -1249,22 +1316,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
         final existing = _holdings[existingIndex];
         final totalQuantity = existing.quantity + holding.quantity;
 
-        // 1. 수량 가중 이동평균 평단가(KRW) 정확히 계산
-        final double avgPrice = totalQuantity > 0
-            ? ((existing.quantity * existing.price) + (holding.quantity * holding.price)) / totalQuantity
-            : holding.price;
+        // 최신 시장 시세(price / originalPrice)는 최신 단가로 유지하고 수량만 합산
+        final latestPrice = holding.price > 0 ? holding.price : existing.price;
+        final latestOriginalPrice = holding.originalPrice ?? existing.originalPrice;
 
-        // 2. 외화 원가(originalPrice)가 있는 경우 가중평균 계산
-        double? avgOriginalPrice;
-        if (existing.originalPrice != null || holding.originalPrice != null) {
-          final exOrig = existing.originalPrice ?? existing.price;
-          final newOrig = holding.originalPrice ?? holding.price;
-          avgOriginalPrice = totalQuantity > 0
-              ? ((existing.quantity * exOrig) + (holding.quantity * newOrig)) / totalQuantity
-              : newOrig;
-        }
-
-        // 3. 배당 데이터 보존: 새로 추가된 배당 데이터가 유효할 때만 갱신, 아니면 기존 데이터 유지
+        // 배당 데이터 보존: 새로 추가된 배당 데이터가 유효할 때만 갱신, 아니면 기존 데이터 유지
         final effectiveDividends = (holding.dividends != null && holding.dividends!.isNotEmpty)
             ? holding.dividends
             : existing.dividends;
@@ -1275,8 +1331,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
           type: existing.type,
           account: existing.account,
           quantity: totalQuantity,
-          price: avgPrice,
-          originalPrice: avgOriginalPrice,
+          price: latestPrice,
+          originalPrice: latestOriginalPrice,
           currency: holding.currency ?? existing.currency,
           dividends: effectiveDividends,
         );
@@ -1321,13 +1377,66 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     );
 
     if (holding != null && mounted) {
-      setState(() => _holdings = List.from(_holdings)..[index] = holding);
+      if (holding.currency == 'USD' &&
+          holding.originalPrice != null &&
+          holding.originalPrice! > 0 &&
+          holding.price > 0) {
+        widget.storage.lastExchangeRate = holding.price / holding.originalPrice!;
+      }
+
+      final duplicateIndex = _holdings.indexWhere((h) =>
+          !identical(h, originalHolding) &&
+          h.account == holding.account &&
+          ((holding.symbol?.isNotEmpty == true && h.symbol == holding.symbol) ||
+              ((holding.symbol?.isEmpty ?? true) &&
+                  h.name == holding.name &&
+                  h.type == holding.type)));
+
+      String message;
+      if (duplicateIndex != -1) {
+        final existing = _holdings[duplicateIndex];
+        final totalQuantity = existing.quantity + holding.quantity;
+        final latestPrice = holding.price > 0 ? holding.price : existing.price;
+        final latestOriginalPrice = holding.originalPrice ?? existing.originalPrice;
+        final effectiveDividends =
+            (holding.dividends != null && holding.dividends!.isNotEmpty)
+                ? holding.dividends
+                : existing.dividends;
+
+        final merged = Holding(
+          name: existing.name,
+          symbol: existing.symbol,
+          type: existing.type,
+          account: existing.account,
+          quantity: totalQuantity,
+          price: latestPrice,
+          originalPrice: latestOriginalPrice,
+          currency: holding.currency ?? existing.currency,
+          dividends: effectiveDividends,
+        );
+
+        final nextList = List<Holding>.from(_holdings);
+        nextList[duplicateIndex] = merged;
+        nextList.removeWhere((h) => identical(h, originalHolding));
+        setState(() => _holdings = nextList);
+        message = "'${holding.name}' 자산이 동일 계좌 기존 수량에 합산되었습니다.";
+      } else {
+        final currentIndex = _holdings.indexOf(originalHolding);
+        final targetIndex = currentIndex != -1
+            ? currentIndex
+            : (index < _holdings.length ? index : -1);
+        if (targetIndex == -1) return;
+
+        setState(() => _holdings = List.from(_holdings)..[targetIndex] = holding);
+        message = "'${holding.name}' 자산이 수정되었습니다.";
+      }
+
       _saveAll();
       _syncPrices();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("'${holding.name}' 자산이 수정되었습니다."),
+            content: Text(message),
             backgroundColor: const Color(0xFF176B5B),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 2),
@@ -1442,7 +1551,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${holding.account.label} · ${holding.type == AssetType.cash ? '₩${formatNumber(holding.quantity)}' : '${formatNumber(holding.quantity)}주'}',
+                              '${holding.account.label} · ${holding.type == AssetType.cash ? '₩${formatNumber(holding.quantity)}' : '${formatQuantity(holding.quantity)}주'}',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,

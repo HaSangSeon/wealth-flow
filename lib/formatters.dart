@@ -85,22 +85,36 @@ class NumberInputFormatter extends TextInputFormatter {
 
 /// 소수점을 그대로 보존하면서 콤마만 포맷팅하는 함수 (입력 필드용)
 String formatFullPrecision(double value) {
-  final valStr = value.toString();
-  final parts = valStr.split('.');
+  if (value.isNaN || value.isInfinite) return '0';
+  final sign = value < 0 ? '-' : '';
+  final absVal = value.abs();
+
+  // 부동소수점 미세 오차(0.30000000000000004 등) 제거: 소수점 최대 6자리까지 유효숫자 보존
+  String fixed = absVal.toStringAsFixed(6);
+  if (fixed.contains('.')) {
+    fixed = fixed.replaceFirst(RegExp(r'0+$'), '');
+    if (fixed.endsWith('.')) {
+      fixed = fixed.substring(0, fixed.length - 1);
+    }
+  }
+
+  final parts = fixed.split('.');
   final integerPart = parts[0];
-  final decimalPart = parts.length > 1 ? '.${parts[1]}' : '';
-  
-  final chars = integerPart.replaceAll('-', '').split('').reversed.toList();
+  final decimalPart = parts.length > 1 && parts[1].isNotEmpty ? '.${parts[1]}' : '';
+
+  final chars = integerPart.split('').reversed.toList();
   final buffer = StringBuffer();
   for (var i = 0; i < chars.length; i++) {
     if (i > 0 && i % 3 == 0) buffer.write(',');
     buffer.write(chars[i]);
   }
   final formattedInteger = buffer.toString().split('').reversed.join();
-  final sign = value < 0 ? '-' : '';
-  
-  if (decimalPart == '.0') {
-    return '$sign$formattedInteger';
+
+  if (formattedInteger == '0' && decimalPart.isEmpty) {
+    return '0';
   }
   return '$sign$formattedInteger$decimalPart';
 }
+
+/// 소수점 주식 수량(예: 0.2584주, 105.75주)을 손실 없이 표시하는 포맷터
+String formatQuantity(double value) => formatFullPrecision(value);

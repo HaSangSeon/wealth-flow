@@ -617,7 +617,7 @@ class AssetManagementTab extends StatelessWidget {
                                                         TextSpan(
                                                           children: [
                                                             TextSpan(
-                                                              text: '${formatNumber(holding.quantity)}주',
+                                                              text: '${formatQuantity(holding.quantity)}주',
                                                               style: TextStyle(
                                                                 fontWeight: FontWeight.w600,
                                                                 color: isDark ? Colors.grey[300] : const Color(0xFF5A5245),

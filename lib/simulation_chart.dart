@@ -229,24 +229,36 @@ class _ProjectionChartState extends State<ProjectionChart> with SingleTickerProv
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              '누적 투자금: ${formatCurrency(point.cumulativeContribution)}',
-              style: TextStyle(
-                fontSize: 11,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ),
+            Builder(
+              builder: (context) {
+                final initialAsset = widget.points.isNotEmpty ? widget.points.first.total : 0.0;
+                final totalInvested = initialAsset + point.cumulativeContribution;
+                final profit = point.total - totalInvested;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '누적 투자원금: ${formatCurrency(totalInvested)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '예상 수익: ${profit >= 0 ? '+' : ''}${formatCurrency(profit)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: profit >= 0
+                            ? (isDark ? const Color(0xFF34D399) : const Color(0xFF059669))
+                            : const Color(0xFFE57373),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
-            if (point.total > point.cumulativeContribution) ...[
-              const SizedBox(height: 2),
-              Text(
-                '예상 수익: +${formatCurrency(point.total - point.cumulativeContribution)}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? const Color(0xFF34D399) : const Color(0xFF059669),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
           ],
         ),
       ),
