@@ -711,6 +711,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
   late SimulationSettings _settings;
   bool _isSyncing = false;
   bool _pendingResync = false;
+  bool _isAppResumed = true;
+  Timer? _periodicSyncTimer;
 
   @override
   void initState() {
@@ -723,10 +725,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndSyncPrices();
     });
+    _periodicSyncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (mounted && _isAppResumed) {
+        _checkAndSyncPrices();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _periodicSyncTimer?.cancel();
     themeNotifier.removeListener(_updateWidget);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -740,7 +748,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    _isAppResumed = state == AppLifecycleState.resumed;
+    if (_isAppResumed) {
       _checkAndSyncPrices();
     }
   }
@@ -817,10 +826,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       final yahooService = YahooFinanceService();
 
       // Always fetch the latest USD-KRW exchange rate first on sync
+      bool usdRateUpdated = false;
       try {
         final double? usdRate = await yahooService.fetchExchangeRate('USD');
         if (usdRate != null && widget.storage.activeProfileId == syncProfileId) {
           widget.storage.lastExchangeRate = usdRate;
+          usdRateUpdated = true;
         }
       } catch (e) {
         debugPrint("Failed to fetch USD exchange rate: $e");
@@ -850,11 +861,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
           double price = rawPrice;
           if (currency != 'KRW') {
             double? exchangeRate = await yahooService.fetchExchangeRate(currency);
-            exchangeRate ??= yahooService.getFallbackExchangeRate(currency);
-            price = rawPrice * exchangeRate;
-            if (currency == 'USD' && widget.storage.activeProfileId == syncProfileId) {
-              widget.storage.lastExchangeRate = exchangeRate;
+            if (exchangeRate != null) {
+              if (currency == 'USD' && widget.storage.activeProfileId == syncProfileId) {
+                widget.storage.lastExchangeRate = exchangeRate;
+                usdRateUpdated = true;
+              }
+            } else {
+              // 환율 조회 실패 시 고정 환율로 덮어쓰지 않고 기존 보유 종목의 적용 환율 또는 마지막 저장 환율 유지
+              final existingWithRate = _holdings
+                  .where((h) =>
+                      h.symbol == symbol &&
+                      h.originalPrice != null &&
+                      h.originalPrice! > 0 &&
+                      h.price > 0)
+                  .firstOrNull;
+              if (existingWithRate != null) {
+                exchangeRate = existingWithRate.price / existingWithRate.originalPrice!;
+              } else if (currency == 'USD') {
+                exchangeRate = widget.storage.lastExchangeRate;
+              }
             }
+            if (exchangeRate == null || exchangeRate <= 0) continue;
+            price = rawPrice * exchangeRate;
           }
 
           final fetchedDividends = details['dividends'] as List<Map<String, dynamic>>?;
@@ -917,7 +945,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
         });
         _saveAll();
       }
-      widget.storage.lastSyncedAt = DateTime.now();
+
+      final bool syncSucceeded = symbolsToSync.isEmpty
+          ? usdRateUpdated
+          : syncedQuotes.isNotEmpty;
+      if (syncSucceeded && mounted && widget.storage.activeProfileId == syncProfileId) {
+        widget.storage.lastSyncedAt = DateTime.now();
+        if (!hasUpdates) {
+          setState(() {});
+        }
+      }
       portfolioNewsKey.currentState?.fetchNews();
     } finally {
       if (mounted) {
@@ -965,22 +1002,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       _holdings.fold(0, (previous, holding) => previous + holding.value);
 
   double get _actualDividendYield {
-    if (_holdings.isEmpty) return 0.0;
+    if (_holdings.isEmpty || _currentValue <= 0) return 0.0;
     final divData = calculateDividendData(
       holdings: _holdings,
       lastExchangeRate: widget.storage.lastExchangeRate,
       applyTax: false,
     );
-    if (divData.totalStockValuation > 0) {
-      return (divData.annualTotal / divData.totalStockValuation) * 100;
-    }
-    return 0.0;
+    // 현금 자산을 포함한 전체 포트폴리오 평가액(_currentValue) 대비 실효 배당수익률 산출
+    return (divData.annualTotal / _currentValue) * 100;
   }
 
   double get _effectiveDividendYield {
     if (_settings.dividendYield <= 0) return 0.0;
-    final actual = _actualDividendYield;
-    return actual > 0 ? actual : 3.0;
+    if (_holdings.isNotEmpty) {
+      return _actualDividendYield;
+    }
+    return _settings.dividendYield;
   }
 
   List<ProjectionPoint> _buildProjection(double dividendYieldPercent) =>
@@ -1295,7 +1332,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       showDragHandle: false,
-      builder: (context) => const HoldingFormSheet(),
+      builder: (context) => HoldingFormSheet(
+        lastExchangeRate: widget.storage.lastExchangeRate,
+      ),
     );
 
     if (holding != null && mounted) {
@@ -1372,8 +1411,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       showDragHandle: false,
-      builder: (context) =>
-          HoldingFormSheet(initialHolding: originalHolding),
+      builder: (context) => HoldingFormSheet(
+        initialHolding: originalHolding,
+        lastExchangeRate: widget.storage.lastExchangeRate,
+      ),
     );
 
     if (holding != null && mounted) {
@@ -1455,6 +1496,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
       context: context,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final mediaQuery = MediaQuery.of(ctx);
+        final systemBottomPadding = math.max(mediaQuery.viewPadding.bottom, mediaQuery.padding.bottom);
+
         return Dialog(
           backgroundColor: isDark ? const Color(0xFF202020) : Colors.white,
           shape: RoundedRectangleBorder(
@@ -1464,7 +1508,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> with Widget
               width: 1,
             ),
           ),
-          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+          insetPadding: EdgeInsets.fromLTRB(
+            28,
+            24,
+            28,
+            math.max(24.0, systemBottomPadding + 16.0),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(22),
             child: Column(

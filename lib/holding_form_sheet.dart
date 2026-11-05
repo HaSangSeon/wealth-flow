@@ -1,12 +1,18 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'models.dart';
 import 'yahoo_finance_service.dart';
 import 'formatters.dart';
 
 class HoldingFormSheet extends StatefulWidget {
-  const HoldingFormSheet({super.key, this.initialHolding});
+  const HoldingFormSheet({
+    super.key,
+    this.initialHolding,
+    this.lastExchangeRate,
+  });
 
   final Holding? initialHolding;
+  final double? lastExchangeRate;
 
   @override
   State<HoldingFormSheet> createState() => _HoldingFormSheetState();
@@ -32,6 +38,7 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
   int _lastMatchedResultsCount = 0;
   bool _isSearching = false;
   String? _selectedSymbol;
+  int _priceRequestToken = 0;
 
   static bool _isExplicitCashName(String raw) {
     final norm = raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
@@ -112,6 +119,8 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
   void _onSearchQueryChanged(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) {
+      _priceRequestToken++;
+      _isLoadingPrice.value = false;
       _searchResults.value = [];
       _lastMatchedResultsCount = 0;
       _isSearching = false;
@@ -135,6 +144,8 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
     final isExplicitCash = _isExplicitCashName(trimmed);
 
     if (_selectedSymbol != null) {
+      _priceRequestToken++;
+      _isLoadingPrice.value = false;
       setState(() {
         _selectedSymbol = null;
         _type = isExplicitCash
@@ -194,6 +205,7 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
   Future<void> _onSelectSearchResult(YahooFinanceSearchResult result) async {
     if (!mounted) return;
     FocusScope.of(context).unfocus();
+    final int requestToken = ++_priceRequestToken;
     final isKr = result.symbol.endsWith('.KS') || result.symbol.endsWith('.KQ');
     setState(() {
       _nameController.text = result.shortname;
@@ -211,19 +223,43 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
     _isLoadingPrice.value = true;
 
     try {
-      final detailsFuture = _yahooService.fetchStockDetails(result.symbol);
-      final details = await detailsFuture;
+      final details = await _yahooService.fetchStockDetails(result.symbol);
+      if (!mounted || requestToken != _priceRequestToken || _selectedSymbol != result.symbol) {
+        return;
+      }
       if (details != null && details['price'] != null) {
         double price = (details['price'] as num).toDouble();
         final currency = (details['currency'] as String?)?.toUpperCase() ?? 'USD';
 
         if (currency != 'KRW') {
           double? exchangeRate = await _yahooService.fetchExchangeRate(currency);
-          exchangeRate ??= _yahooService.getFallbackExchangeRate(currency);
+          if (!mounted || requestToken != _priceRequestToken || _selectedSymbol != result.symbol) {
+            return;
+          }
+          if (exchangeRate == null) {
+            if (widget.initialHolding != null &&
+                widget.initialHolding!.currency?.toUpperCase() == currency &&
+                widget.initialHolding!.originalPrice != null &&
+                widget.initialHolding!.originalPrice! > 0 &&
+                widget.initialHolding!.price > 0) {
+              exchangeRate =
+                  widget.initialHolding!.price / widget.initialHolding!.originalPrice!;
+            } else if (currency == 'USD' &&
+                widget.lastExchangeRate != null &&
+                widget.lastExchangeRate! > 0) {
+              exchangeRate = widget.lastExchangeRate;
+            }
+          }
+          if (exchangeRate == null || exchangeRate <= 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('환율 정보를 불러오지 못했습니다. 네트워크 확인 후 다시 선택해주세요.')),
+            );
+            return;
+          }
           price = price * exchangeRate;
         }
 
-        if (mounted) {
+        if (mounted && requestToken == _priceRequestToken && _selectedSymbol == result.symbol) {
           setState(() {
             _priceController.text = formatNumber(price);
             _currency = currency;
@@ -245,19 +281,19 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
             }
           });
         }
-      } else if (mounted) {
+      } else if (mounted && requestToken == _priceRequestToken) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('시세 정보를 불러오지 못했습니다. 네트워크 확인 후 다시 선택해주세요.')),
         );
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && requestToken == _priceRequestToken) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('시세 정보를 불러오지 못했습니다. 네트워크 확인 후 다시 선택해주세요.')),
         );
       }
     } finally {
-      if (mounted) {
+      if (mounted && requestToken == _priceRequestToken) {
         _isLoadingPrice.value = false;
       }
     }
@@ -272,6 +308,13 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
     final inputFillColor = isDark ? const Color(0xFF242424) : const Color(0xFFF7F5F0);
     final borderColor = isDark ? const Color(0xFF383838) : const Color(0xFFE4DFD5);
 
+    final mediaQuery = MediaQuery.of(context);
+    final bottomInset = mediaQuery.viewInsets.bottom;
+    final systemBottomPadding = math.max(mediaQuery.viewPadding.bottom, mediaQuery.padding.bottom);
+    final bottomSpacing = bottomInset > 0
+        ? (bottomInset + 20.0)
+        : (systemBottomPadding + 28.0);
+
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
@@ -282,7 +325,7 @@ class _HoldingFormSheetState extends State<HoldingFormSheet> {
           padding: EdgeInsets.only(
             left: 20,
             right: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 28,
+            bottom: bottomSpacing,
             top: 14,
           ),
           child: Form(

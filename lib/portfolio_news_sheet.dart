@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -269,7 +270,15 @@ class _PortfolioNewsSheetState extends State<PortfolioNewsSheet> {
                     ),
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+                    padding: EdgeInsets.fromLTRB(
+                      18,
+                      14,
+                      18,
+                      24 + math.max(
+                        MediaQuery.of(context).viewPadding.bottom,
+                        MediaQuery.of(context).padding.bottom,
+                      ),
+                    ),
                     itemCount: displayNews.length,
                     separatorBuilder: (_, __) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),

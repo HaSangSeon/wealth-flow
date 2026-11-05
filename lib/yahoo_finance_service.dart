@@ -616,7 +616,10 @@ class YahooFinanceService {
       }
     } catch (_) {}
 
-    return getFallbackExchangeRate(cleanBase);
+    if (cleanBase == 'USD' && _cachedExchangeRate != null) {
+      return _cachedExchangeRate;
+    }
+    return null;
   }
 
   /// 실시간 주가 및 배당 정보 가져오기 (국내 주식은 네이버 금융 1순위, 글로벌은 야후/네이버)
@@ -706,6 +709,7 @@ class YahooFinanceService {
                 dividends.add({
                   'amount': perPayout,
                   'date': dt.millisecondsSinceEpoch ~/ 1000,
+                  'synthetic': true,
                 });
               }
             }

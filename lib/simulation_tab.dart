@@ -154,16 +154,17 @@ class _SimulationTabState extends State<SimulationTab> {
 
     double actualDividendYield = 0.0;
     double actualMonthlyDividend = 0.0;
-    if (widget.holdings != null && widget.holdings!.isNotEmpty) {
+    final bool hasHoldings = widget.holdings != null && widget.holdings!.isNotEmpty;
+    if (hasHoldings) {
       final divData = calculateDividendData(
         holdings: widget.holdings!,
         lastExchangeRate: widget.storage.lastExchangeRate,
         applyTax: false,
       );
       actualMonthlyDividend = divData.annualTotal / 12;
-      if (divData.totalStockValuation > 0) {
+      if (widget.currentValue > 0) {
         actualDividendYield =
-            (divData.annualTotal / divData.totalStockValuation) * 100;
+            (divData.annualTotal / widget.currentValue) * 100;
       }
     }
 
@@ -230,6 +231,7 @@ class _SimulationTabState extends State<SimulationTab> {
                         annualReturn: widget.annualReturn,
                         dividendYield: widget.dividendYield,
                         actualDividendYield: actualDividendYield,
+                        hasHoldings: hasHoldings,
                         monthlyContribution: widget.monthlyContribution,
                         contributionGrowth: widget.contributionGrowth,
                         years: widget.years,

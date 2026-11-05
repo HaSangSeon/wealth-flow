@@ -6,6 +6,7 @@ class ScenarioPanel extends StatelessWidget {
   final double annualReturn;
   final double dividendYield;
   final double actualDividendYield;
+  final bool hasHoldings;
   final double monthlyContribution;
   final double contributionGrowth;
   final int years;
@@ -20,6 +21,7 @@ class ScenarioPanel extends StatelessWidget {
     required this.annualReturn,
     required this.dividendYield,
     this.actualDividendYield = 0.0,
+    this.hasHoldings = false,
     required this.monthlyContribution,
     required this.contributionGrowth,
     required this.years,
@@ -165,7 +167,7 @@ class ScenarioPanel extends StatelessWidget {
 
   Widget _buildReinvestRow(BuildContext context, bool isDark, Color primaryColor) {
     final bool isReinvesting = dividendYield > 0;
-    final effectiveYield = actualDividendYield > 0
+    final effectiveYield = hasHoldings
         ? actualDividendYield
         : (dividendYield > 0 ? dividendYield : 3.0);
 
@@ -229,9 +231,11 @@ class ScenarioPanel extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                isReinvesting
-                    ? '내 보유자산 배당률로 복리 재투자'
-                    : '배당금을 쓰거나 수령 (주가 상승만 반영)',
+                hasHoldings && actualDividendYield <= 0
+                    ? '현재 보유자산의 배당금이 없습니다 (연 0.0%)'
+                    : (isReinvesting
+                        ? '총자산 대비 실효 배당률로 전체 복리 재투자 가정'
+                        : '배당금을 쓰거나 수령 (주가 상승만 반영)'),
                 style: TextStyle(
                   fontSize: 11,
                   color: isDark ? Colors.grey[400] : const Color(0xFF7A7265),
@@ -247,7 +251,7 @@ class ScenarioPanel extends StatelessWidget {
             activeTrackColor: isDark ? const Color(0xFF34D399) : primaryColor,
             onChanged: (val) {
               if (val) {
-                onDividendYieldChanged(effectiveYield);
+                onDividendYieldChanged(effectiveYield > 0 ? effectiveYield : (hasHoldings ? 0.0 : 3.0));
               } else {
                 onDividendYieldChanged(0.0);
               }

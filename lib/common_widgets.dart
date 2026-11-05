@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -43,6 +44,13 @@ void openSettingsSheet(
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final primaryColor = Theme.of(context).colorScheme.primary;
 
+        final mediaQuery = MediaQuery.of(context);
+        final bottomInset = mediaQuery.viewInsets.bottom;
+        final systemBottomPadding = math.max(mediaQuery.viewPadding.bottom, mediaQuery.padding.bottom);
+        final bottomSpacing = bottomInset > 0
+            ? (bottomInset + 20.0)
+            : (systemBottomPadding + 28.0);
+
         return Container(
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
@@ -52,7 +60,7 @@ void openSettingsSheet(
             left: 20,
             right: 20,
             top: 14,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 28,
+            bottom: bottomSpacing,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -535,6 +543,9 @@ class ModernHelpDialog extends StatelessWidget {
       }
     }
 
+    final mediaQuery = MediaQuery.of(context);
+    final systemBottomPadding = math.max(mediaQuery.viewPadding.bottom, mediaQuery.padding.bottom);
+
     return Dialog(
       backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
       elevation: 16,
@@ -545,7 +556,12 @@ class ModernHelpDialog extends StatelessWidget {
           width: 1,
         ),
       ),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: EdgeInsets.fromLTRB(
+        24,
+        24,
+        24,
+        math.max(24.0, systemBottomPadding + 16.0),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(22),
         child: Column(

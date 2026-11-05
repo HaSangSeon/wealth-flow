@@ -361,7 +361,9 @@ class _DividendCalendarViewState extends State<DividendCalendarView> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            div.isHistorical ? '지급완료' : '지급예정',
+                            div.isHistorical
+                                ? (div.isEstimated ? '추정지급일 경과' : '지급완료')
+                                : (div.isEstimated ? '지급예정(추정)' : '지급예정'),
                             style: TextStyle(
                               fontSize: 9.5,
                               fontWeight: FontWeight.bold,

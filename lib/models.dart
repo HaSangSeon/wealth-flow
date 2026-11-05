@@ -141,16 +141,35 @@ class Holding {
       };
 
   factory Holding.fromJson(Map<String, dynamic> json) {
-    final int rawTypeIndex = json['type'] as int;
+    final rawName = json['name'];
+    if (rawName is! String || rawName.trim().isEmpty) {
+      throw const FormatException('Invalid holding name');
+    }
+
+    final rawType = json['type'];
+    if (rawType is! int || rawType < 0) {
+      throw const FormatException('Invalid holding type');
+    }
+    final int rawTypeIndex = rawType;
     
     AssetType type;
     AccountType account;
 
     if (json.containsKey('account')) {
+      final rawAccount = json['account'];
+      if (rawTypeIndex >= AssetType.values.length ||
+          rawAccount is! int ||
+          rawAccount < 0 ||
+          rawAccount >= AccountType.values.length) {
+        throw const FormatException('Invalid holding type or account index');
+      }
       type = AssetType.values[rawTypeIndex];
-      account = AccountType.values[json['account'] as int];
+      account = AccountType.values[rawAccount];
     } else {
       // 구버전 데이터 마이그레이션
+      if (rawTypeIndex > 5) {
+        throw const FormatException('Invalid legacy holding type index');
+      }
       if (rawTypeIndex == 3) { // 구 pension
         type = AssetType.etf;
         account = AccountType.pension;
@@ -173,13 +192,20 @@ class Holding {
       }
     }
 
+    final rawQty = json['quantity'];
+    final rawPrice = json['price'];
+    if (rawQty is! num || !rawQty.isFinite || rawQty < 0 ||
+        rawPrice is! num || !rawPrice.isFinite || rawPrice < 0) {
+      throw const FormatException('Invalid holding quantity or price');
+    }
+
     return Holding(
-      name: json['name'] as String,
+      name: rawName,
       symbol: json['symbol'] as String?,
       type: type,
       account: account,
-      quantity: (json['quantity'] as num).toDouble(),
-      price: (json['price'] as num).toDouble(),
+      quantity: rawQty.toDouble(),
+      price: rawPrice.toDouble(),
       originalPrice: json.containsKey('originalPrice')
           ? (json['originalPrice'] as num?)?.toDouble()
           : null,
@@ -620,46 +646,123 @@ class StorageService {
     try {
       final dynamic decoded = jsonDecode(jsonStr);
       if (decoded is! Map<String, dynamic>) return false;
-      if (decoded['app'] != 'WealthFlow' && !decoded.containsKey('profileData') && !decoded.containsKey('holdings')) {
+      final bool hasProfileData = decoded.containsKey('profileData');
+      final bool hasLegacyHoldings = decoded.containsKey('holdings');
+      if (!hasProfileData && !hasLegacyHoldings) {
         return false;
       }
 
-      // 1. 프로필 목록 복원
-      if (decoded.containsKey('profiles') && decoded['profiles'] is List) {
-        final profileList = (decoded['profiles'] as List)
-            .map((item) => Profile.fromJson(item as Map<String, dynamic>))
-            .toList();
-        if (profileList.isNotEmpty) {
-          saveProfiles(profileList);
+      // 1. 사전 무결성 검증 (손상된 백업이 기존 데이터를 덮어쓰거나 빈 목록으로 처리되지 않도록 메모리에서 선검증)
+      List<Profile>? validatedProfiles;
+      if (decoded.containsKey('profiles')) {
+        if (decoded['profiles'] is! List) return false;
+        final rawProfiles = decoded['profiles'] as List;
+        if (rawProfiles.isEmpty) return false;
+        validatedProfiles = rawProfiles.map((item) {
+          if (item is! Map<String, dynamic>) {
+            throw const FormatException('Invalid profile entry');
+          }
+          final p = Profile.fromJson(item);
+          if (p.id.trim().isEmpty || p.name.trim().isEmpty) {
+            throw const FormatException('Empty profile id or name');
+          }
+          return p;
+        }).toList();
+      }
+
+      final Map<String, ({
+        List<Holding> holdings,
+        SimulationSettings? simSettings,
+        PensionTaxSettings? pensionSettings,
+      })> validatedProfileData = {};
+      List<Holding>? validatedLegacyHoldings;
+
+      if (hasProfileData) {
+        if (decoded['profileData'] is! Map) return false;
+        final profileData = decoded['profileData'] as Map<String, dynamic>;
+        if (profileData.isEmpty) return false;
+
+        for (final entry in profileData.entries) {
+          final profileId = entry.key;
+          final data = entry.value;
+          if (profileId.trim().isEmpty || data is! Map<String, dynamic>) {
+            return false;
+          }
+          if (!data.containsKey('holdings') || data['holdings'] is! List) {
+            return false;
+          }
+          final rawHoldings = data['holdings'] as List;
+          final parsedHoldings = rawHoldings.map((h) {
+            if (h is! Map<String, dynamic>) {
+              throw const FormatException('Invalid holding item');
+            }
+            return Holding.fromJson(h);
+          }).toList();
+
+          SimulationSettings? parsedSim;
+          if (data['simulationSettings'] != null) {
+            if (data['simulationSettings'] is! Map<String, dynamic>) return false;
+            parsedSim = SimulationSettings.fromJson(data['simulationSettings'] as Map<String, dynamic>);
+          }
+
+          PensionTaxSettings? parsedPension;
+          if (data['pensionSettings'] != null) {
+            if (data['pensionSettings'] is! Map<String, dynamic>) return false;
+            parsedPension = PensionTaxSettings.fromJson(data['pensionSettings'] as Map<String, dynamic>);
+          }
+
+          validatedProfileData[profileId] = (
+            holdings: parsedHoldings,
+            simSettings: parsedSim,
+            pensionSettings: parsedPension,
+          );
         }
+      } else if (hasLegacyHoldings) {
+        if (decoded['holdings'] is! List) return false;
+        final rawHoldings = decoded['holdings'] as List;
+        validatedLegacyHoldings = rawHoldings.map((h) {
+          if (h is! Map<String, dynamic>) {
+            throw const FormatException('Invalid holding item');
+          }
+          return Holding.fromJson(h);
+        }).toList();
+      }
+
+      // 2. 검증 완료된 데이터만 안전하게 반영
+      if (validatedProfiles != null && validatedProfiles.isNotEmpty) {
+        saveProfiles(validatedProfiles);
       }
 
       if (decoded.containsKey('activeProfileId') && decoded['activeProfileId'] is String) {
-        activeProfileId = decoded['activeProfileId'] as String;
+        final targetActiveId = (decoded['activeProfileId'] as String).trim();
+        if (targetActiveId.isNotEmpty) {
+          activeProfileId = targetActiveId;
+        }
       }
 
-      // 2. 프로필별 데이터 복원
-      if (decoded.containsKey('profileData') && decoded['profileData'] is Map) {
-        final profileData = decoded['profileData'] as Map<String, dynamic>;
-        profileData.forEach((profileId, data) {
-          if (data is Map<String, dynamic>) {
-            final hKey = profileId == 'default' ? _holdingsKey : '${_holdingsKey}_$profileId';
-            final sKey = profileId == 'default' ? _settingsKey : '${_settingsKey}_$profileId';
-            final pKey = profileId == 'default' ? _pensionSettingsKey : '${_pensionSettingsKey}_$profileId';
+      if (hasProfileData) {
+        validatedProfileData.forEach((profileId, bundle) {
+          final hKey = profileId == 'default' ? _holdingsKey : '${_holdingsKey}_$profileId';
+          final sKey = profileId == 'default' ? _settingsKey : '${_settingsKey}_$profileId';
+          final pKey = profileId == 'default' ? _pensionSettingsKey : '${_pensionSettingsKey}_$profileId';
 
-            if (data['holdings'] != null) {
-              _box.put(hKey, jsonEncode(data['holdings']));
-            }
-            if (data['simulationSettings'] != null) {
-              _box.put(sKey, jsonEncode(data['simulationSettings']));
-            }
-            if (data['pensionSettings'] != null) {
-              _box.put(pKey, jsonEncode(data['pensionSettings']));
-            }
+          _box.put(hKey, jsonEncode(bundle.holdings.map((h) => h.toJson()).toList()));
+          if (bundle.simSettings != null) {
+            _box.put(sKey, jsonEncode(bundle.simSettings!.toJson()));
+          } else {
+            _box.delete(sKey);
+          }
+          if (bundle.pensionSettings != null) {
+            _box.put(pKey, jsonEncode(bundle.pensionSettings!.toJson()));
+          } else {
+            _box.delete(pKey);
           }
         });
-      } else if (decoded.containsKey('holdings')) {
-        _box.put(_currentHoldingsKey, jsonEncode(decoded['holdings']));
+      } else if (validatedLegacyHoldings != null) {
+        _box.put(
+          _currentHoldingsKey,
+          jsonEncode(validatedLegacyHoldings.map((h) => h.toJson()).toList()),
+        );
       }
 
       return true;

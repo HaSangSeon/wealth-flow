@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -28,9 +29,11 @@ class _ProfileSelectionSheetState extends State<ProfileSelectionSheet> {
     final profiles = widget.storage.profiles;
     final activeId = widget.storage.activeProfileId;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final mediaQuery = MediaQuery.of(context);
+    final systemBottomPadding = math.max(mediaQuery.viewPadding.bottom, mediaQuery.padding.bottom);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + systemBottomPadding),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),

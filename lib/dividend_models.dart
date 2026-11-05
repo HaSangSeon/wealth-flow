@@ -11,6 +11,7 @@ class UpcomingDividend {
   final double krwAmount;
   final bool isHistorical;
   final bool isTaxFree;
+  final bool isEstimated;
 
   UpcomingDividend({
     required this.name,
@@ -23,6 +24,7 @@ class UpcomingDividend {
     required this.krwAmount,
     this.isHistorical = false,
     this.isTaxFree = false,
+    this.isEstimated = true,
   });
 }
 
@@ -88,13 +90,15 @@ DividendCalculationResult calculateDividendData({
   final List<StockDividendSummary> stockSummaries = [];
 
   final now = DateTime.now();
-  final oneYearAgo = now.subtract(const Duration(days: 365));
+  final today = DateTime(now.year, now.month, now.day);
+  final oneYearAgo = today.subtract(const Duration(days: 365));
 
   DateTime addMonths(DateTime date, int months) {
-    int newYear = date.year + (date.month + months - 1) ~/ 12;
-    int newMonth = (date.month + months - 1) % 12 + 1;
+    final int totalMonths = (date.year * 12 + (date.month - 1)) + months;
+    final int newYear = totalMonths ~/ 12;
+    final int newMonth = (totalMonths % 12) + 1;
     int newDay = date.day;
-    int maxDays = DateTime(newYear, newMonth + 1, 0).day;
+    final int maxDays = DateTime(newYear, newMonth + 1, 0).day;
     if (newDay > maxDays) newDay = maxDays;
     return DateTime(newYear, newMonth, newDay);
   }
@@ -121,6 +125,18 @@ DividendCalculationResult calculateDividendData({
     var cur = dt;
     while (isKoreanHoliday(cur)) {
       cur = cur.subtract(const Duration(days: 1));
+    }
+    return cur;
+  }
+
+  DateTime addBusinessDays(DateTime dt, int businessDays) {
+    var cur = dt;
+    int added = 0;
+    while (added < businessDays) {
+      cur = cur.add(const Duration(days: 1));
+      if (!isKoreanHoliday(cur)) {
+        added++;
+      }
     }
     return cur;
   }
@@ -200,6 +216,13 @@ DividendCalculationResult calculateDividendData({
     required bool isEtf,
     required int frequencyCount,
   }) {
+    if (frequencyCount == 52) {
+      if (isKoreanStock) {
+        return addBusinessDays(baseDate, 2);
+      }
+      return adjustWeekend(baseDate.add(const Duration(days: 2)));
+    }
+
     if (isKoreanStock) {
       if (isEtf) {
         // 국내 ETF: 분배락일 익월 제2영업일(익월 2~5일경) 지급 (KODEX, TIGER, ACE, SOL 등 공통)
@@ -328,31 +351,52 @@ DividendCalculationResult calculateDividendData({
     int frequencyCount = 1;
     if (sortedDivs.length > 1) {
       final List<int> intervals = [];
-      for (int i = 0; i < sortedDivs.length - 1; i++) {
-        final d1 = DateTime.fromMillisecondsSinceEpoch((sortedDivs[i+1]['date'] as int) * 1000);
+      final int maxSamplePairs = sortedDivs.length - 1 < 12 ? sortedDivs.length - 1 : 12;
+      for (int i = 0; i < maxSamplePairs; i++) {
+        final d1 = DateTime.fromMillisecondsSinceEpoch((sortedDivs[i + 1]['date'] as int) * 1000);
         final d2 = DateTime.fromMillisecondsSinceEpoch((sortedDivs[i]['date'] as int) * 1000);
-        intervals.add(d2.difference(d1).inDays);
+        final diffDays = d2.difference(d1).inDays;
+        if (diffDays > 0) {
+          intervals.add(diffDays);
+        }
       }
-      final double avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
-      
-      if (avgInterval <= 45) { freqLabel = '월배당'; frequencyCount = 12; }
-      else if (avgInterval <= 120) { freqLabel = '분기배당'; frequencyCount = 4; }
-      else if (avgInterval <= 240) { freqLabel = '반기배당'; frequencyCount = 2; }
+      if (intervals.isNotEmpty) {
+        final double avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+
+        if (avgInterval <= 12) {
+          freqLabel = '주배당';
+          frequencyCount = 52;
+        } else if (avgInterval <= 45) {
+          freqLabel = '월배당';
+          frequencyCount = 12;
+        } else if (avgInterval <= 120) {
+          freqLabel = '분기배당';
+          frequencyCount = 4;
+        } else if (avgInterval <= 240) {
+          freqLabel = '반기배당';
+          frequencyCount = 2;
+        }
+      }
     } else if (isEtf || h.type == AssetType.etf) {
-      // 신규 상장 월배당 ETF가 첫 1회만 분배한 경우 연배당(1/12)으로 축소되는 현상 방지
+      // 신규 상장 월배당/주배당 ETF가 첫 1회만 분배한 경우 연배당으로 축소되는 현상 방지
       final upperName = h.name.toUpperCase();
+      const weeklyHints = ['위클리', 'WEEKLY', '타겟위클리', '타겟데일리', 'DAILY'];
       const monthlyHints = [
-        '월배당', '배당다우존스', '커버드콜', '프리미엄', '타겟위클리', '타겟데일리',
+        '월배당', '배당다우존스', '커버드콜', '프리미엄',
         '미국배당', '리츠', '채권', '머니마켓', 'CD', 'KOFR',
       ];
-      if (monthlyHints.any((k) => upperName.contains(k))) {
+      if (weeklyHints.any((k) => upperName.contains(k))) {
+        freqLabel = '주배당';
+        frequencyCount = 52;
+      } else if (monthlyHints.any((k) => upperName.contains(k))) {
         freqLabel = '월배당';
         frequencyCount = 12;
       }
     }
 
     final latestDiv = sortedDivs.first;
-    final latestExDate = DateTime.fromMillisecondsSinceEpoch((latestDiv['date'] as int) * 1000);
+    final rawLatestEx = DateTime.fromMillisecondsSinceEpoch((latestDiv['date'] as int) * 1000);
+    final latestExDate = DateTime(rawLatestEx.year, rawLatestEx.month, rawLatestEx.day);
     final double latestAmount = (latestDiv['amount'] as num).toDouble();
 
     // 차등배당/변동배당 여부 판별 (직전 1년 사이클 내 최대/최소 배당 편차가 35% 이상이면 계절별 실제 배당 적용)
@@ -399,23 +443,31 @@ DividendCalculationResult calculateDividendData({
     final List<UpcomingDividend> pendingDeclaredDividends = [];
 
     for (final divItem in sortedDivs) {
-      final exDate = DateTime.fromMillisecondsSinceEpoch((divItem['date'] as int) * 1000);
+      if (divItem['synthetic'] == true) continue;
+
+      final rawEx = DateTime.fromMillisecondsSinceEpoch((divItem['date'] as int) * 1000);
+      final exDate = DateTime(rawEx.year, rawEx.month, rawEx.day);
       if (exDate.isBefore(oneYearAgo)) continue;
 
       double rawAmount = (divItem['amount'] as num).toDouble();
       if (applyTax && !isTaxFreeAccount) rawAmount = rawAmount * taxMultiplier;
       
       final krwVal = h.quantity * rawAmount * exchangeRate;
-      final paymentDate = calculatePaymentDate(
-        holding: h,
-        baseDate: exDate,
-        isKoreanStock: isKoreanStock,
-        isEtf: isEtf,
-        frequencyCount: frequencyCount,
-      );
+      final int? explicitPayTs = (divItem['paymentDate'] as int?) ?? (divItem['payDate'] as int?);
+      final bool hasExplicitPayDate = explicitPayTs != null && explicitPayTs > 0;
+      final DateTime rawPayDate = hasExplicitPayDate
+          ? DateTime.fromMillisecondsSinceEpoch(explicitPayTs * 1000)
+          : calculatePaymentDate(
+              holding: h,
+              baseDate: exDate,
+              isKoreanStock: isKoreanStock,
+              isEtf: isEtf,
+              frequencyCount: frequencyCount,
+            );
+      final paymentDate = DateTime(rawPayDate.year, rawPayDate.month, rawPayDate.day);
       final recordDate = calculateRecordDate(exDate, isKoreanStock);
 
-      final bool isPaid = paymentDate.isBefore(now);
+      final bool isPaid = paymentDate.isBefore(today);
       final divObj = UpcomingDividend(
         name: h.name,
         symbol: h.symbol ?? '',
@@ -427,6 +479,7 @@ DividendCalculationResult calculateDividendData({
         krwAmount: krwVal,
         isHistorical: isPaid,
         isTaxFree: isTaxFreeAccount,
+        isEstimated: !hasExplicitPayDate,
       );
 
       if (isPaid) {
@@ -439,7 +492,13 @@ DividendCalculationResult calculateDividendData({
 
     // ── 2. 미래 1년 치 (frequencyCount 횟수) 예상 배당 연속 투영 ──
     final List<UpcomingDividend> futureStockDividends = [];
-    final int monthStep = 12 ~/ frequencyCount;
+    DateTime stepExDate(DateTime base, int stepOffset) {
+      if (frequencyCount == 52) {
+        return base.add(Duration(days: 7 * stepOffset));
+      }
+      final int monthStep = 12 ~/ frequencyCount;
+      return addMonths(base, monthStep * stepOffset);
+    }
 
     for (final pending in pendingDeclaredDividends.take(frequencyCount)) {
       allDividends.add(pending);
@@ -453,24 +512,47 @@ DividendCalculationResult calculateDividendData({
     }
 
     final remainingCount = frequencyCount - futureStockDividends.length;
-    final nextBaseDate = addMonths(latestExDate, monthStep);
+    int stepOffset = 1;
+    // 오래된 배당 이력이더라도 과거 날짜가 '지급예정'으로 생성되지 않도록 오늘(today) 이후 첫 지급주기로 이동
+    while (stepOffset < 520) {
+      final candidateExDate = stepExDate(latestExDate, stepOffset);
+      final rawCandidatePay = calculatePaymentDate(
+        holding: h,
+        baseDate: candidateExDate,
+        isKoreanStock: isKoreanStock,
+        isEtf: isEtf,
+        frequencyCount: frequencyCount,
+      );
+      final candidatePayDate = DateTime(rawCandidatePay.year, rawCandidatePay.month, rawCandidatePay.day);
+      final alreadyPending = futureStockDividends.any((d) =>
+          d.paymentDate.year == candidatePayDate.year &&
+          d.paymentDate.month == candidatePayDate.month &&
+          d.paymentDate.day == candidatePayDate.day);
+      if (!candidatePayDate.isBefore(today) && !alreadyPending) {
+        break;
+      }
+      stepOffset++;
+    }
 
     for (int i = 0; i < remainingCount; i++) {
+      final int currentStep = stepOffset + i;
+      final int seasonalIndex = (frequencyCount - (currentStep % frequencyCount)) % frequencyCount;
       final double basePayoutAmount = isSeasonalDividend
-          ? cycleAmounts[frequencyCount - 1 - (i % frequencyCount)]
+          ? cycleAmounts[seasonalIndex]
           : latestAmount;
       double projectedRawAmount = basePayoutAmount;
       if (applyTax && !isTaxFreeAccount) projectedRawAmount = projectedRawAmount * taxMultiplier;
       final futureKrwAmount = h.quantity * projectedRawAmount * exchangeRate;
 
-      final currentProjectedExDate = addMonths(nextBaseDate, monthStep * i);
-      final paymentDate = calculatePaymentDate(
+      final currentProjectedExDate = stepExDate(latestExDate, currentStep);
+      final rawPaymentDate = calculatePaymentDate(
         holding: h,
         baseDate: currentProjectedExDate,
         isKoreanStock: isKoreanStock,
         isEtf: isEtf,
         frequencyCount: frequencyCount,
       );
+      final paymentDate = DateTime(rawPaymentDate.year, rawPaymentDate.month, rawPaymentDate.day);
       final recordDate = calculateRecordDate(currentProjectedExDate, isKoreanStock);
 
       monthlyDividends[paymentDate.month] = (monthlyDividends[paymentDate.month] ?? 0.0) + futureKrwAmount;
@@ -491,6 +573,7 @@ DividendCalculationResult calculateDividendData({
         krwAmount: futureKrwAmount,
         isHistorical: false,
         isTaxFree: isTaxFreeAccount,
+        isEstimated: true,
       );
 
       allDividends.add(upcomingDiv);
